@@ -1,4 +1,4 @@
-package ru.uporov.d.android.easydagger
+package ru.uporov.d.android.dakker
 
 import android.support.test.InstrumentationRegistry
 import android.support.test.runner.AndroidJUnit4
