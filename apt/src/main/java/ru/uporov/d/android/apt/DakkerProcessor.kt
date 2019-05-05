@@ -5,7 +5,10 @@ import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.sun.tools.javac.code.Attribute
 import com.sun.tools.javac.code.Symbol
-import ru.uporov.d.android.common.*
+import ru.uporov.d.android.common.DakkerProvider
+import ru.uporov.d.android.common.IllegalAnnotationUsageException
+import ru.uporov.d.android.common.Inject
+import ru.uporov.d.android.common.InjectionRoot
 import java.io.File
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
@@ -23,8 +26,8 @@ class DakkerProcessor : AbstractProcessor() {
 
     override fun getSupportedAnnotationTypes(): MutableSet<String> {
         return mutableSetOf(
-            InjectionRoot::class.java.name,
-            InjectionBranch::class.java.name
+            InjectionRoot::class.java.name
+//            ,InjectionBranch::class.java.name
         )
     }
 
@@ -32,41 +35,29 @@ class DakkerProcessor : AbstractProcessor() {
         return SourceVersion.latest()
     }
 
-    private fun Symbol.ClassSymbol.getRequestedDependencies(): Set<String> {
-        return enclosedElements
-            .filter { it.getAnnotation(Inject::class.java) != null }
-            .map { it.type.returnType.asTypeName().toString() }
-            .toSet()
-    }
-
     override fun process(set: MutableSet<out TypeElement>?, roundEnvironment: RoundEnvironment): Boolean {
         val targetsWithRequestedDependencies = mutableMapOf<ClassName, Set<String>>()
-        fun generate(
-            byAnnotation: KClass<out Annotation>,
-            generation: (
-                pack: String,
-                className: String,
-                root: DakkerRoot
-            ) -> Unit
-        ) {
-            roundEnvironment.getElementsAnnotatedWith(byAnnotation.java)?.forEach { element ->
-                if (element !is Symbol.ClassSymbol) throw IllegalAnnotationUsageException(InjectionRoot::class)
+        //        generate(InjectionBranch::class, ::generateBranchModule)
+        roundEnvironment.getElementsAnnotatedWith(InjectionRoot::class.java)?.forEach { element ->
+            if (element !is Symbol.ClassSymbol) throw IllegalAnnotationUsageException(InjectionRoot::class)
 
-                val pack = processingEnv.elementUtils.getPackageOf(element).toString()
-                val className = element.simpleName.toString()
+            val pack = processingEnv.elementUtils.getPackageOf(element).toString()
+            val className = element.simpleName.toString()
 
-                val target = element.asRoot()
-                targetsWithRequestedDependencies[target.root.asClassName()] = element.getRequestedDependencies()
-                generation(pack, className, target)
-            }
-        }
-        generate(InjectionBranch::class, ::generateBranchModule)
-        generate(InjectionRoot::class) { pack: String,
-                                         className: String,
-                                         root: DakkerRoot ->
-            generateRootModule(pack, className, root, targetsWithRequestedDependencies)
+            val target = element.asRoot()
+            targetsWithRequestedDependencies[target.root.asClassName()] =
+                element.getRequestedDependencies().values.map(TypeName::toString).toSet()
+            generateRootModule(pack, className, target, targetsWithRequestedDependencies)
         }
         return true
+    }
+
+    private fun Symbol.ClassSymbol.getRequestedDependencies(): Map<String, TypeName> {
+        return enclosedElements
+            .filter { it.getAnnotation(Inject::class.java) != null }
+            .map { it.type.returnType.asTypeName() }
+            .map { it.toString().substringAfterLast(".").decapitalize() to it }
+            .toMap()
     }
 
     private fun generateRootModule(
@@ -84,7 +75,7 @@ class DakkerProcessor : AbstractProcessor() {
                     .addProperty(
                         PropertySpec.builder(
                             "root",
-                            ClassName(pack, providersName(className)),
+                            ClassName(pack, providerName(className)),
                             KModifier.PRIVATE,
                             KModifier.LATEINIT
                         )
@@ -92,14 +83,15 @@ class DakkerProcessor : AbstractProcessor() {
                             .build()
                     )
                     .addFunction(
-                        FunSpec.builder("init")
-                            .addParameter("rootModule", ClassName(pack, providersName(className)))
+                        FunSpec.builder("startDakker")
+                            .receiver(root.root.asClassName())
+                            .addParameter("rootModule", ClassName(pack, providerName(className)))
                             .addStatement("root = rootModule")
                             .build()
                     )
                     .addFunction(
                         FunSpec.builder("inject")
-                            .addParameter("bean", Bean::class)
+                            .addParameter("bean", ClassName.bestGuess("androidx.lifecycle.LifecycleOwner"))
                             .addStatement("// TODO apply tree with corresponded ModuleProvider")
                             .build()
                     )
@@ -107,9 +99,9 @@ class DakkerProcessor : AbstractProcessor() {
                         FunSpec.builder("get")
                             .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
                             .addTypeVariable(TypeVariableName("reified T"))
-                            .receiver(Bean::class)
+                            .receiver(root.root.asClassName())
                             .returns(TypeVariableName("T"))
-                            .addStatement("// TODO find dependency in the tree")
+                            .addStatement(" return root.providers[T::class]?.invoke(this@get) as T")
                             .build()
                     )
                     .apply {
@@ -166,49 +158,58 @@ class DakkerProcessor : AbstractProcessor() {
         className: String,
         root: DakkerRoot
     ): FileSpec.Builder = apply {
+        val currentClassName = ClassName(packageName = pack, simpleName = className)
+        val currentProviderName = providerName(className)
         val branchesParameters = mutableSetOf<String>()
-        val providersParameters = mutableMapOf<ClassName, String>()
+
         addType(
-            TypeSpec.classBuilder(providersName(className))
+            TypeSpec.classBuilder(currentProviderName)
                 .primaryConstructor(
                     FunSpec.constructorBuilder()
-                        .apply {
-                            root.dependencies.forEach {
-                                addParameter(
-                                    ParameterSpec.builder(
-                                        "${it.simpleName}Provider".decapitalize()
-                                            .also { name -> providersParameters[it] = name },
-                                        LambdaTypeName.get(
-                                            null,
-                                            ClassName(packageName = pack, simpleName = className),
-                                            returnType = it
-                                        )
-                                    ).build()
-                                )
-                            }
-                        }
+                        .withProvidersLambdas(root, currentClassName)
                         .apply {
                             root.branches.forEach {
                                 addParameter(
                                     "${it.simpleName}Branch".decapitalize()
                                         .also { name -> branchesParameters.add(name) },
-                                    ClassName(pack, providersName(it.simpleName))
+                                    ClassName(pack, providerName(it.simpleName))
                                 )
                             }
                         }
+                        .addModifiers(KModifier.PRIVATE)
                         .build()
                 )
-                .addSuperinterface(DakkerProvider::class)
+                .superclass(DakkerProvider::class.asClassName().parameterizedBy(root.root.asClassName()))
+                .addType(
+                    TypeSpec.companionObjectBuilder()
+                        .addFunction(
+                            FunSpec.builder("${className.decapitalize()}Bean")
+                                .returns(ClassName(pack, currentProviderName))
+                                .withProvidersLambdas(root, currentClassName)
+                                .addStatement(
+                                    " return $currentProviderName(${root.requestedDependencies.keys.joinToString(",")
+                                    { "${it}Provider" }})"
+                                )
+                                .build()
+                        )
+                        .build()
+                )
                 .addProperty(
                     PropertySpec
                         .builder("beanClass", KClass::class.asClassName().parameterizedBy(root.root.asClassName()))
                         .initializer("${root.root.asClassName().simpleName}::class")
+                        .addModifiers(KModifier.OVERRIDE)
                         .build()
                 )
                 .addProperty(
                     PropertySpec
-                        .builder("branches", Set::class.parameterizedBy(DakkerProvider::class))
+                        .builder(
+                            "branches", Set::class.asClassName().parameterizedBy(
+                                DakkerProvider::class.asClassName().parameterizedBy(TypeVariableName("*"))
+                            )
+                        )
                         .initializer("setOf(${branchesParameters.joinToString()})")
+                        .addModifiers(KModifier.OVERRIDE)
                         .build()
                 )
                 .addProperty(
@@ -223,32 +224,48 @@ class DakkerProcessor : AbstractProcessor() {
                                 )
                             )
                         )
-                        .initializer(
-                            "mapOf(${providersParameters
-                                .asIterable()
-                                .joinToString { "${it.key.simpleName}::class to ${it.value}" }
-                            })"
-                        )
+                        .initializer(root.mapOfProviders())
+                        .addModifiers(KModifier.OVERRIDE)
                         .build()
                 )
                 .build()
         )
     }
 
+    // todo extract and keep as local value
+    private fun FunSpec.Builder.withProvidersLambdas(root: DakkerRoot, currentClassName: ClassName) = apply {
+        root.requestedDependencies.forEach {
+            addParameter(
+                ParameterSpec.builder(
+                    "${it.key}Provider",
+                    LambdaTypeName.get(null, currentClassName, returnType = it.value)
+                ).build()
+            )
+        }
+    }
+
+    private fun DakkerRoot.mapOfProviders(): String {
+        return "mapOf(${requestedDependencies.keys
+            .joinToString { "${it.capitalize()}::class to ${it.decapitalize()}Provider" }
+        })"
+    }
+
     private fun moduleName(className: String) = "Dakker$className"
 
-    private fun providersName(className: String) = "DakkerProvider$className"
+    private fun providerName(className: String) = "DakkerProvider$className"
 
     private fun FileSpec.write() = writeTo(File(processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]))
 
     data class DakkerRoot(
         val root: Symbol.ClassSymbol,
-        val branches: Set<ClassName> = setOf(),
-        val dependencies: Set<ClassName> = setOf()
+        val branches: Set<ClassName> = emptySet(),
+        val dependencies: Set<ClassName> = emptySet(),
+        val requestedDependencies: Map<String, TypeName> = emptyMap()
     )
 
     fun Symbol.ClassSymbol.asRoot(): DakkerRoot {
         val branches = mutableSetOf<ClassName>()
+        val requestedDependencies = getRequestedDependencies()
         val dependencies = mutableSetOf<ClassName>()
         for (annotation in annotationMirrors) {
             for (pair in annotation.values) {
@@ -266,7 +283,7 @@ class DakkerProcessor : AbstractProcessor() {
                 }
             }
         }
-        return DakkerRoot(this, branches, dependencies)
+        return DakkerRoot(this, branches, dependencies, requestedDependencies)
     }
 
     private fun List<Attribute.Class>.toKclassList() = map { it.classType.toString() }
