@@ -1,4 +1,4 @@
-package ru.uporov.d.android.common
+package ru.uporov.d.android.common.exception
 
 import kotlin.reflect.KClass
 

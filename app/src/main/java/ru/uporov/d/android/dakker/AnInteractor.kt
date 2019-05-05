@@ -1,12 +1,11 @@
 package ru.uporov.d.android.dakker
 
 import android.content.Context
-import ru.uporov.d.android.common.PerApplication
 
-class SomeInteractor @PerApplication constructor(private val context: Context)
+class AnInteractor(private val context: Context)
 
 // т.е. по факту мы в конструктор запрашиваем зависимости. При генерации кода смотрим,
-// предоставлены ли запрашиваемые зависимости в PerApplication скоупе.
+// предоставлены ли запрашиваемые зависимости как также PerApplication.
 // Если да, матчим, строим граф. Если нет - ошибка компиляции.
 
 // Стоит добавить возможность помечать как PerApplication просто функции, возвращающие, например, контекст
