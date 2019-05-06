@@ -35,13 +35,6 @@ class DakkerProcessor : AbstractProcessor() {
         return SourceVersion.latest()
     }
 
-    data class PerScopeElement(
-        val pack: String,
-        val className: String,
-        val params: List<Symbol.VarSymbol>
-    ) {
-        val qualifiedName = "$pack.$className"
-    }
 
     override fun process(set: MutableSet<out TypeElement>?, roundEnvironment: RoundEnvironment): Boolean {
         val perApplicationElements =
@@ -49,10 +42,12 @@ class DakkerProcessor : AbstractProcessor() {
                 if (element !is Symbol.MethodSymbol) throw IllegalAnnotationUsageException(
                     PerApplication::class
                 )
-                PerScopeElement(
+                Dependency(
                     processingEnv.elementUtils.getPackageOf(element).toString(),
                     element.enclClass().simpleName.toString(),
-                    element.params()
+                    element.params().map {
+                        Dependency(it.packge().toString(), it.type.toString())
+                    }
                 )
             }
 
@@ -64,7 +59,7 @@ class DakkerProcessor : AbstractProcessor() {
             if (element !is Symbol.ClassSymbol) throw IllegalAnnotationUsageException(
                 InjectionRoot::class
             )
-            BeanConstructor(
+            BeanBuilder(
                 pack = processingEnv.elementUtils.getPackageOf(element).toString(),
                 rootName = element.simpleName.toString(),
                 scopeDependencies = perApplicationElements ?: emptyList(),
@@ -77,12 +72,17 @@ class DakkerProcessor : AbstractProcessor() {
         return true
     }
 
-    private fun Symbol.ClassSymbol.getRequestedDependencies(): Map<String, TypeName> {
+    private fun Symbol.ClassSymbol.getRequestedDependencies(): List<Dependency> {
         return enclosedElements
             .filter { it.getAnnotation(Inject::class.java) != null }
             .map { it.type.returnType.asTypeName() }
-            .map { it.toString().substringAfterLast(".").decapitalize() to it }
-            .toMap()
+            .map(TypeName::toString)
+            .map {
+                Dependency(
+                    it.substringBeforeLast("."),
+                    it.substringAfterLast(".")
+                )
+            }
     }
 
     private fun FileSpec.write() = writeTo(File(processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]))
