@@ -2,4 +2,4 @@ package ru.uporov.d.android.common
 
 @Retention(AnnotationRetention.SOURCE)
 @Target(AnnotationTarget.CLASS)
-annotation class PerLifecycle
+annotation class InjectionNode

@@ -12,12 +12,12 @@ private const val MODULE_NAME_FORMAT = "Dakker%s"
 private const val BEAN_NAME_FORMAT = "%sBean"
 private const val PROVIDER_NAME_FORMAT = "%sProvider"
 
-class BeanBuilder(
+class NodeBuilder(
     private val pack: String,
     private val rootName: String,
     private val scopeDependencies: Set<Dependency>,
     private val scopeDependenciesWithoutProviders: Set<Dependency>,
-    private val requestedDependencies: List<Dependency>
+    private val requestedDependencies: Set<Dependency>
 ) {
 
     private val moduleName = MODULE_NAME_FORMAT.format(rootName)
@@ -37,18 +37,6 @@ class BeanBuilder(
         checkDependenciesGraph()
         return FileSpec.builder(pack, moduleName)
             .generateModule()
-            .addFunction(
-                FunSpec.builder("startDakkerModule")
-                    .receiver(ClassName.bestGuess("androidx.lifecycle.LifecycleOwner"))
-                    .addStatement(
-                        """
-                            // TODO create method like this for every InjectionBean
-                            // and subscribe on lifecycle events.
-                            // Destroy module on lifecycle Destroy event
-                        """.trimIndent()
-                    )
-                    .build()
-            )
             .build()
     }
 
@@ -195,7 +183,8 @@ class BeanBuilder(
                             val name = it.name.asProviderParamName()
                             return@joinToString "$name = $name"
                         }
-                        },
+                        }
+                        ${if (scopeDependencies.isEmpty()) "" else ","}
                             ${scopeDependencies.joinToString(",\n") { element ->
                             "${element.name.asProviderParamName()} = {\n" +
                                     "${element.name}(" +

@@ -1,12 +1,9 @@
 package ru.uporov.d.android.dakker
 
-import android.content.Context
-import ru.uporov.d.android.common.PerApplication
+import ru.uporov.d.android.common.ApplicationScope
 
-@PerApplication
+@ApplicationScope
 class ThirdInteractor {
-
-    constructor(context: Context)
 
     private val abc = ""
     val def = 16

@@ -5,7 +5,6 @@ import android.content.Context
 import ru.uporov.d.android.common.Inject
 import ru.uporov.d.android.common.InjectionRoot
 import ru.uporov.d.android.dakker.DakkerApp.AppBean.Companion.appBean
-import ru.uporov.d.android.dakker.DakkerApp.getSomeInteractor
 import ru.uporov.d.android.dakker.DakkerApp.injectAnInteractor
 import ru.uporov.d.android.dakker.DakkerApp.injectContext
 import ru.uporov.d.android.dakker.DakkerApp.startDakker
@@ -21,16 +20,11 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         initDakker()
-        interactor.toString()
-        getSomeInteractor()
     }
 
     private fun initDakker() {
         startDakker(
-            appBean(
-                contextProvider = { it },
-                anInteractorProvider = { AnInteractor(it) }
-            )
+            appBean(contextProvider = { it })
         )
 //        startDakker(appBean(
 //            { this }

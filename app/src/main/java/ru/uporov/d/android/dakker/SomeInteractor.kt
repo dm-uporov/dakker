@@ -1,8 +1,8 @@
 package ru.uporov.d.android.dakker
 
-import ru.uporov.d.android.common.PerApplication
+import ru.uporov.d.android.common.ApplicationScope
 
-class SomeInteractor @PerApplication constructor(anInteractor: AnInteractor)
+class SomeInteractor @ApplicationScope constructor(anInteractor: AnInteractor)
 
 // TODO
 // Стоит добавить возможность помечать как PerApplication просто функции, возвращающие, например, контекст

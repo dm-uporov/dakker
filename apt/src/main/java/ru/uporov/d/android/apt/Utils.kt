@@ -1,8 +1,8 @@
 package ru.uporov.d.android.apt
 
 import com.squareup.kotlinpoet.ClassName
-import com.sun.tools.javac.code.Attribute
 import com.sun.tools.javac.code.Symbol
+import com.sun.tools.javac.code.Type
 
 fun Symbol.MethodSymbol.paramsAsDependencies(): List<Dependency> {
     val params = params()
@@ -18,13 +18,9 @@ fun Symbol.MethodSymbol.paramsAsDependencies(): List<Dependency> {
 }
 
 
-fun List<Attribute.Class>.toKClassList(): List<ClassName> {
-    return map { it.classType.toString() }
-        .map {
-            val name = it.split('.').last()
-            ClassName(it.substringBefore(".$name"), name)
-
-        }
+fun Type.ClassType.toKClassList(): ClassName {
+    val type = toString()
+    return ClassName(type.substringBeforeLast("."), type.substringAfterLast("."))
 }
 
 //    fun Symbol.ClassSymbol.getClassesFromAnnotationParams() {
