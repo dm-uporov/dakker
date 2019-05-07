@@ -8,6 +8,7 @@ import com.sun.tools.javac.code.Symbol
 import ru.uporov.d.android.common.Inject
 import ru.uporov.d.android.common.InjectionRoot
 import ru.uporov.d.android.common.PerApplication
+import ru.uporov.d.android.common.exception.DependenciesConflictException
 import ru.uporov.d.android.common.exception.IllegalAnnotationUsageException
 import ru.uporov.d.android.common.exception.MoreThanOneInjectionRootException
 import java.io.File
@@ -37,23 +38,41 @@ class DakkerProcessor : AbstractProcessor() {
 
 
     override fun process(set: MutableSet<out TypeElement>?, roundEnvironment: RoundEnvironment): Boolean {
-        val perApplicationElements =
-            roundEnvironment.getElementsAnnotatedWith(PerApplication::class.java)?.map { element ->
-                if (element !is Symbol.MethodSymbol) throw IllegalAnnotationUsageException(
-                    PerApplication::class
-                )
-                Dependency(
-                    processingEnv.elementUtils.getPackageOf(element).toString(),
-                    element.enclClass().simpleName.toString(),
-                    element.params().map {
-                        val type = it.type.toString()
-                        Dependency(
-                            type.substringBeforeLast("."),
-                            type.substringAfterLast(".")
-                        )
-                    }
-                )
+        val scopeDependencies = mutableSetOf<Dependency>()
+        val scopeDependenciesWithoutProviders = mutableSetOf<Dependency>()
+
+        roundEnvironment.getElementsAnnotatedWith(PerApplication::class.java)?.forEach { element ->
+            when (element) {
+                is Symbol.MethodSymbol ->
+                    element
+                        .asDependency()
+                        .run(scopeDependencies::add)
+                        .let { wasProviderAddedToCollection(it, element.enclClass()) }
+                is Symbol.ClassSymbol ->
+                    element
+                        .members_field
+                        .elements
+                        .asSequence()
+                        .filter { it is Symbol.MethodSymbol }
+                        .map { it as Symbol.MethodSymbol }
+                        .filter { it.name.toString() == "<init>" }
+                        .also { constructors ->
+                            val count = constructors.count()
+                            if (count > 1) {
+                                element
+                                    .asDependency()
+                                    .run(scopeDependenciesWithoutProviders::add)
+                                    .let { wasProviderAddedToCollection(it, element) }
+                            } else if (count == 1) {
+                                constructors
+                                    .first()
+                                    .asDependency()
+                                    .run(scopeDependencies::add)
+                                    .let { wasProviderAddedToCollection(it, element) }
+                            }
+                        }
             }
+        }
 
         val injectionRoots = roundEnvironment.getElementsAnnotatedWith(InjectionRoot::class.java)
         if (injectionRoots?.count() ?: 0 > 1) {
@@ -66,7 +85,8 @@ class DakkerProcessor : AbstractProcessor() {
             BeanBuilder(
                 pack = processingEnv.elementUtils.getPackageOf(element).toString(),
                 rootName = element.simpleName.toString(),
-                scopeDependencies = perApplicationElements ?: emptyList(),
+                scopeDependencies = scopeDependencies,
+                scopeDependenciesWithoutProviders = scopeDependenciesWithoutProviders,
                 requestedDependencies = element.getRequestedDependencies()
             )
                 .build()
@@ -74,6 +94,10 @@ class DakkerProcessor : AbstractProcessor() {
 
         }
         return true
+    }
+
+    private fun wasProviderAddedToCollection(wasAdded: Boolean, element: Symbol.ClassSymbol) {
+        if (!wasAdded) throw DependenciesConflictException(element.qualifiedName.toString())
     }
 
     private fun Symbol.ClassSymbol.getRequestedDependencies(): List<Dependency> {
@@ -90,6 +114,18 @@ class DakkerProcessor : AbstractProcessor() {
     }
 
     private fun FileSpec.write() = writeTo(File(processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]))
+
+    private fun Symbol.ClassSymbol.asDependency() = asDependency(null)
+
+    private fun Symbol.MethodSymbol.asDependency() = asDependency(paramsAsDependencies())
+
+    private fun Symbol.asDependency(params: List<Dependency>?) =
+        Dependency(
+            processingEnv.elementUtils.getPackageOf(this).toString(),
+            enclClass().simpleName.toString(),
+            params
+        )
+
 
     override fun hashCode(): Int {
         return 1

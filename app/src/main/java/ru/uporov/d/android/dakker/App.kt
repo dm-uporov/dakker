@@ -22,13 +22,14 @@ class App : Application() {
         super.onCreate()
         initDakker()
         interactor.toString()
+        getSomeInteractor()
     }
 
     private fun initDakker() {
         startDakker(
             appBean(
                 contextProvider = { it },
-                anInteractorProvider = { AnInteractor(it.getSomeInteractor()) }
+                anInteractorProvider = { AnInteractor(it) }
             )
         )
 //        startDakker(appBean(

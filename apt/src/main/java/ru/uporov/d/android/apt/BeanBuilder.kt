@@ -15,7 +15,8 @@ private const val PROVIDER_NAME_FORMAT = "%sProvider"
 class BeanBuilder(
     private val pack: String,
     private val rootName: String,
-    private val scopeDependencies: List<Dependency>,
+    private val scopeDependencies: Set<Dependency>,
+    private val scopeDependenciesWithoutProviders: Set<Dependency>,
     private val requestedDependencies: List<Dependency>
 ) {
 
@@ -25,8 +26,12 @@ class BeanBuilder(
     private val rootClassName = ClassName.bestGuess("$pack.$rootName")
     private val beanClassName = ClassName("$pack.$moduleName", beanName)
 
-    private val allDependencies: Set<Dependency> = requestedDependencies.union(scopeDependencies)
-    private val dependenciesWithoutProviders: Set<Dependency> = requestedDependencies.subtract(scopeDependencies)
+    private val allDependencies: Set<Dependency> = requestedDependencies
+        .union(scopeDependenciesWithoutProviders)
+        .union(scopeDependencies)
+    private val dependenciesWithoutProviders: Set<Dependency> = requestedDependencies
+        .union(scopeDependenciesWithoutProviders)
+        .subtract(scopeDependencies)
 
     fun build(): FileSpec {
         checkDependenciesGraph()
@@ -145,7 +150,7 @@ class BeanBuilder(
     }
 
     private fun TypeSpec.Builder.getFunctions(): TypeSpec.Builder = apply {
-        scopeDependencies.forEach {
+        allDependencies.forEach {
             addFunction(
                 FunSpec.builder("get${it.name.capitalize()}")
                     .receiver(rootClassName)
@@ -184,22 +189,22 @@ class BeanBuilder(
                     FunSpec.builder(BEAN_NAME_FORMAT.format(rootName.decapitalize()))
                         .returns(ClassName("$pack.$moduleName", beanName))
                         .withProvidersLambdasParamsOf(dependenciesWithoutProviders)
-                        .addStatement(
-                            """ return $beanName(
+                        .addStatement("""
+                            return $beanName(
                             ${dependenciesWithoutProviders.joinToString {
-                                val name = it.name.asProviderParamName()
-                                return@joinToString "$name = $name"
-                            }
-                            },
+                            val name = it.name.asProviderParamName()
+                            return@joinToString "$name = $name"
+                        }
+                        },
                             ${scopeDependencies.joinToString(",\n") { element ->
-                                "${element.name.asProviderParamName()} = {\n" +
-                                        "${element.name}(" +
-                                        element.params?.joinToString { "it.get<${it.name}>()" } +
-                                        ")" +
-                                        "\n}"
-                            }}
+                            "${element.name.asProviderParamName()} = {\n" +
+                                    "${element.name}(" +
+                                    (element.params?.joinToString { "it.get<${it.name}>()" } ?: "") +
+                                    ")" +
+                                    "\n}"
+                        }}
                             )
-                            """.trimIndent()
+                        """.trimIndent()
                         )
                         .build()
                 )

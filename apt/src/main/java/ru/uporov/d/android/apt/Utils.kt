@@ -2,6 +2,21 @@ package ru.uporov.d.android.apt
 
 import com.squareup.kotlinpoet.ClassName
 import com.sun.tools.javac.code.Attribute
+import com.sun.tools.javac.code.Symbol
+
+fun Symbol.MethodSymbol.paramsAsDependencies(): List<Dependency> {
+    val params = params()
+    if (params.isNullOrEmpty()) return emptyList()
+
+    return params.map {
+        val type = it.type.toString()
+        Dependency(
+            type.substringBeforeLast("."),
+            type.substringAfterLast(".")
+        )
+    }
+}
+
 
 fun List<Attribute.Class>.toKClassList(): List<ClassName> {
     return map { it.classType.toString() }

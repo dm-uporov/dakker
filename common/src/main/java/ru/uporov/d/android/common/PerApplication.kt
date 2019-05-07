@@ -1,5 +1,5 @@
 package ru.uporov.d.android.common
 
 @Retention(AnnotationRetention.SOURCE)
-@Target(AnnotationTarget.CONSTRUCTOR)
+@Target(AnnotationTarget.CLASS, AnnotationTarget.CONSTRUCTOR)
 annotation class PerApplication
