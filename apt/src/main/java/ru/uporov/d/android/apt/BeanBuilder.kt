@@ -3,6 +3,9 @@ package ru.uporov.d.android.apt
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import ru.uporov.d.android.common.DakkerBean
+import ru.uporov.d.android.common.exception.DependenciesConflictException
+import ru.uporov.d.android.common.exception.DependenciesCycleException
+import ru.uporov.d.android.common.exception.DependencyIsNotProvidedException
 import kotlin.reflect.KClass
 
 private const val MODULE_NAME_FORMAT = "Dakker%s"
@@ -25,8 +28,8 @@ class BeanBuilder(
     private val allDependencies: Set<Dependency> = requestedDependencies.union(scopeDependencies)
     private val dependenciesWithoutProviders: Set<Dependency> = requestedDependencies.subtract(scopeDependencies)
 
-
     fun build(): FileSpec {
+        checkDependenciesGraph()
         return FileSpec.builder(pack, moduleName)
             .generateModule()
             .addFunction(
@@ -42,6 +45,30 @@ class BeanBuilder(
                     .build()
             )
             .build()
+    }
+
+    // TODO надо бы уточнять, в каком конкретно скоупе проблема
+    private fun checkDependenciesGraph() {
+        // check on existence every providers
+        scopeDependencies
+            .asSequence()
+            .map { it.params ?: emptyList() }
+            .flatten()
+            .forEach { if (!allDependencies.contains(it)) throw DependencyIsNotProvidedException(it.qualifiedName) }
+
+
+        // Check on conflicting providers
+        scopeDependencies
+            .groupingBy { it.qualifiedName }
+            .eachCount()
+            .filter { it.value > 1 }
+            .run {
+                if (isNotEmpty()) {
+                    throw DependenciesConflictException(keys.joinToString())
+                }
+            }
+
+        // TODO check on graph conflicts
     }
 
     private fun FileSpec.Builder.generateModule() = apply {
@@ -87,7 +114,20 @@ class BeanBuilder(
                 .addTypeVariable(TypeVariableName("reified T"))
                 .receiver(rootClassName)
                 .returns(TypeVariableName("T"))
-                .addStatement(" return root.providers[T::class]?.invoke(this@get) as T")
+                .addStatement(
+                    """
+                    Thread.currentThread().stackTrace
+                        .asSequence()
+                        .groupBy { it }
+                        .filter { it.value.size > 1 }
+                        .run {
+                            if (isNotEmpty()) {
+                                throw ${DependenciesCycleException::class.qualifiedName}(T::class)
+                            }
+                        }
+                    return root.providers[T::class]?.invoke(this@get) as T
+                    """.trimIndent()
+                )
                 .build()
         )
     }

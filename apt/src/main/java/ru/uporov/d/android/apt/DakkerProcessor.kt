@@ -24,8 +24,8 @@ class DakkerProcessor : AbstractProcessor() {
         const val KAPT_KOTLIN_GENERATED_OPTION_NAME = "kapt.kotlin.generated"
     }
 
-    override fun getSupportedAnnotationTypes(): MutableSet<String> {
-        return mutableSetOf(
+    override fun getSupportedAnnotationTypes(): Set<String> {
+        return setOf(
             InjectionRoot::class.java.name,
             PerApplication::class.java.name
         )
@@ -46,7 +46,11 @@ class DakkerProcessor : AbstractProcessor() {
                     processingEnv.elementUtils.getPackageOf(element).toString(),
                     element.enclClass().simpleName.toString(),
                     element.params().map {
-                        Dependency(it.packge().toString(), it.type.toString())
+                        val type = it.type.toString()
+                        Dependency(
+                            type.substringBeforeLast("."),
+                            type.substringAfterLast(".")
+                        )
                     }
                 )
             }
