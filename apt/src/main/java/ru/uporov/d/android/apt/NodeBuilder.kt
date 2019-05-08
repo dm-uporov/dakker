@@ -2,11 +2,8 @@ package ru.uporov.d.android.apt
 
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import ru.uporov.d.android.common.DakkerBean
 import ru.uporov.d.android.common.exception.DependenciesConflictException
-import ru.uporov.d.android.common.exception.DependenciesCycleException
 import ru.uporov.d.android.common.exception.DependencyIsNotProvidedException
-import kotlin.reflect.KClass
 
 private const val MODULE_NAME_FORMAT = "Dakker%s"
 private const val BEAN_NAME_FORMAT = "%sBean"
@@ -69,7 +66,6 @@ class NodeBuilder(
             TypeSpec.objectBuilder(moduleName)
                 .beanLateinitProperty()
                 .startDakkerFunction()
-                .parametrizedGetFunction()
                 .injectFunctions()
                 .getFunctions()
                 .beanInnerClass()
@@ -100,38 +96,13 @@ class NodeBuilder(
         )
     }
 
-    private fun TypeSpec.Builder.parametrizedGetFunction() = apply {
-        addFunction(
-            FunSpec.builder("get")
-                .addModifiers(KModifier.PRIVATE, KModifier.INLINE)
-                .addTypeVariable(TypeVariableName("reified T"))
-                .receiver(rootClassName)
-                .returns(TypeVariableName("T"))
-                .addStatement(
-                    """
-                    Thread.currentThread().stackTrace
-                        .asSequence()
-                        .groupBy { it }
-                        .filter { it.value.size > 1 }
-                        .run {
-                            if (isNotEmpty()) {
-                                throw ${DependenciesCycleException::class.qualifiedName}(T::class)
-                            }
-                        }
-                    return root.providers[T::class]?.invoke(this@get) as T
-                    """.trimIndent()
-                )
-                .build()
-        )
-    }
-
     private fun TypeSpec.Builder.injectFunctions(): TypeSpec.Builder = apply {
         requestedDependencies.forEach {
             addFunction(
                 FunSpec.builder("inject${it.name}")
                     .receiver(rootClassName)
                     .returns(Lazy::class.asClassName().parameterizedBy(it.className))
-                    .addStatement(" return lazy { get<${it.name}>() }")
+                    .addStatement(" return lazy { root.${it.name.asProviderParamName()}.invoke(this) }")
                     .build()
             )
         }
@@ -143,7 +114,7 @@ class NodeBuilder(
                 FunSpec.builder("get${it.name.capitalize()}")
                     .receiver(rootClassName)
                     .returns(ClassName.bestGuess(it.qualifiedName))
-                    .addStatement(" return get<${it.name}>()")
+                    .addStatement(" return root.${it.name.asProviderParamName()}.invoke(this)")
                     .build()
             )
         }
@@ -153,10 +124,8 @@ class NodeBuilder(
         addType(
             TypeSpec.classBuilder(beanName)
                 .beanConstructor()
-                .superclass(DakkerBean::class.asClassName().parameterizedBy(rootClassName))
                 .beanCompanion()
-                .beanClassProperty()
-                .beanProvidersProperty()
+                .providersValues()
                 .build()
         )
     }
@@ -188,7 +157,7 @@ class NodeBuilder(
                             ${scopeDependencies.joinToString(",\n") { element ->
                             "${element.name.asProviderParamName()} = {\n" +
                                     "${element.name}(" +
-                                    (element.params?.joinToString { "it.get<${it.name}>()" } ?: "") +
+                                    (element.params?.joinToString { "it.get${it.name}()" } ?: "") +
                                     ")" +
                                     "\n}"
                         }}
@@ -201,37 +170,17 @@ class NodeBuilder(
         )
     }
 
-    private fun TypeSpec.Builder.beanClassProperty() = apply {
-        addProperty(
-            PropertySpec
-                .builder("beanClass", KClass::class.asClassName().parameterizedBy(rootClassName))
-                .initializer("$rootName::class")
-                .addModifiers(KModifier.OVERRIDE)
-                .build()
-        )
-    }
-
-    private fun TypeSpec.Builder.beanProvidersProperty() = apply {
-        addProperty(
-            PropertySpec
-                .builder(
-                    "providers", ClassName.bestGuess("ru.uporov.d.android.common.ProvidersMap")
-                        .parameterizedBy(rootClassName, TypeVariableName("*"))
+    private fun TypeSpec.Builder.providersValues() = apply {
+        allDependencies
+            .map {
+                PropertySpec.builder(
+                    it.name.asProviderParamName(),
+                    LambdaTypeName.get(null, rootClassName, returnType = it.className),
+                    KModifier.INTERNAL
                 )
-                .initializer(mapOfProviders())
-                .addModifiers(KModifier.OVERRIDE)
-                .build()
-        )
-    }
-
-    private fun mapOfProviders(): String {
-        return """
-        mutableMapOf(
-        ${allDependencies.joinToString(",\n") {
-            "${it.name}::class to ${it.name.asProviderParamName()}"
-        }}
-        )
-        """.trimIndent()
+                    .initializer(it.name.asProviderParamName())
+                    .build()
+            }.let(::addProperties)
     }
 
     private fun FunSpec.Builder.withProvidersLambdasParamsOf(dependencies: Set<Dependency>) = apply {

@@ -41,8 +41,8 @@ class DakkerProcessor : AbstractProcessor() {
 
 
     override fun process(set: MutableSet<out TypeElement>?, roundEnvironment: RoundEnvironment): Boolean {
-        roundEnvironment.generateScopesBy(InjectionNode::class, NodeScope::class)
-        roundEnvironment.generateScopesBy(InjectionRoot::class, ApplicationScope::class)
+        val nodes = roundEnvironment.generateScopesBy(InjectionNode::class, NodeScope::class)
+        roundEnvironment.generateScopesBy(InjectionRoot::class, ApplicationScope::class, nodes)
 
 
 //        val scopeDependencies = mutableSetOf<Dependency>()
@@ -105,8 +105,9 @@ class DakkerProcessor : AbstractProcessor() {
 
     private fun RoundEnvironment.generateScopesBy(
         coreMarker: KClass<out Annotation>,
-        scopeLevel: KClass<out Annotation>
-    ) {
+        scopeLevel: KClass<out Annotation>,
+        childNodes: Set<ClassName> = emptySet()
+    ): Set<ClassName> {
         val scopeDependencies = mutableSetOf<Pair<ClassName?, Dependency>>()
         val scopeDependenciesWithoutProviders = mutableSetOf<Pair<ClassName?, Dependency>>()
 
@@ -186,7 +187,7 @@ class DakkerProcessor : AbstractProcessor() {
             .toSet()
             .union(scopeDependenciesMap.keys)
             .union(scopeDependenciesWithoutProvidersMap.keys)
-            .map {
+            .onEach {
                 if (it == null) {
                     if (rootClassName == null) throw NoInjectionRootException()
 
@@ -207,7 +208,12 @@ class DakkerProcessor : AbstractProcessor() {
                         requestedDependencies = requestedDependenciesMap[it] ?: emptySet()
                     )
                 }
-            }.forEach { it.build().write() }
+                    .build()
+                    .write()
+            }
+            .filterNotNull()
+            .toSet()
+            .run { return this }
     }
 
     private fun wasProviderAddedToCollection(wasAdded: Boolean, element: Symbol.ClassSymbol) {
