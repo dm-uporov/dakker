@@ -2,12 +2,13 @@ package ru.uporov.d.android.dakker
 
 import android.app.Application
 import android.content.Context
-import ru.uporov.d.android.common.Inject
-import ru.uporov.d.android.common.InjectionRoot
-import ru.uporov.d.android.dakker.DakkerApp.AppBean.Companion.appBean
+import ru.uporov.d.android.common.annotation.Inject
+import ru.uporov.d.android.common.annotation.InjectionRoot
+import ru.uporov.d.android.dakker.AppNode.Companion.appNode
+import ru.uporov.d.android.dakker.Dakker.startDakker
 import ru.uporov.d.android.dakker.DakkerApp.injectAnInteractor
 import ru.uporov.d.android.dakker.DakkerApp.injectContext
-import ru.uporov.d.android.dakker.DakkerApp.startDakker
+import ru.uporov.d.android.dakker.MainActivityNode.Companion.mainActivityNode
 
 @InjectionRoot
 class App : Application() {
@@ -24,18 +25,8 @@ class App : Application() {
 
     private fun initDakker() {
         startDakker(
-            appBean(contextProvider = { it })
+            appNode { this },
+            mainActivityNode()
         )
-//        startDakker(appBean(
-//            { this }
-////            mainActivityBean(
-////                { parentBean().getContext() },
-////                { SomeInteractor(parentBean().getContext()) }
-////            ),
-////            secondActivityBean(
-////                { parentBean().getContext() },
-////                { AnotherInteractor(parentBean().getContext()) }
-////            )
-//        ))
     }
 }

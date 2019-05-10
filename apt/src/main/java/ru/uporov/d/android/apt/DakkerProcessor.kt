@@ -7,11 +7,10 @@ import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.asTypeName
 import com.sun.tools.javac.code.Symbol
 import com.sun.tools.javac.code.Type
-import ru.uporov.d.android.common.*
+import ru.uporov.d.android.common.annotation.*
 import ru.uporov.d.android.common.exception.DependenciesConflictException
 import ru.uporov.d.android.common.exception.IllegalAnnotationUsageException
 import ru.uporov.d.android.common.exception.MoreThanOneInjectionRootException
-import ru.uporov.d.android.common.exception.NoInjectionRootException
 import java.io.File
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
@@ -39,79 +38,50 @@ class DakkerProcessor : AbstractProcessor() {
         return SourceVersion.latest()
     }
 
-
     override fun process(set: MutableSet<out TypeElement>?, roundEnvironment: RoundEnvironment): Boolean {
-        val nodes = roundEnvironment.generateScopesBy(InjectionNode::class, NodeScope::class)
-        roundEnvironment.generateScopesBy(InjectionRoot::class, ApplicationScope::class, nodes)
+        val root = roundEnvironment.getRoot() ?: return true
 
+        val appScopeLevel = roundEnvironment.generateScopesBy(
+            coreMarker = InjectionRoot::class,
+            scopeLevelMarker = ApplicationScope::class,
+            root = root,
+            providedByRootDependencies = emptySet(),
+            isRootScope = true
+        )
+        val activityScopeLevel = roundEnvironment.generateScopesBy(
+            coreMarker = InjectionNode::class,
+            scopeLevelMarker = NodeScope::class,
+            root = root,
+            providedByRootDependencies = appScopeLevel.providedDependencies,
+            isRootScope = false
+        )
 
-//        val scopeDependencies = mutableSetOf<Dependency>()
-//        val scopeDependenciesWithoutProviders = mutableSetOf<Dependency>()
-//
-//        roundEnvironment.getElementsAnnotatedWith(ApplicationScope::class.java)?.forEach { element ->
-//            when (element) {
-//                is Symbol.MethodSymbol ->
-//                    element
-//                        .asDependency()
-//                        .run(scopeDependencies::add)
-//                        .let { wasProviderAddedToCollection(it, element.enclClass()) }
-//                is Symbol.ClassSymbol ->
-//                    element
-//                        .members_field
-//                        .elements
-//                        .asSequence()
-//                        .filter { it is Symbol.MethodSymbol }
-//                        .map { it as Symbol.MethodSymbol }
-//                        .filter { it.name.toString() == "<init>" }
-//                        .also { constructors ->
-//                            val count = constructors.count()
-//                            if (count > 1) {
-//                                element
-//                                    .asDependency()
-//                                    .run(scopeDependenciesWithoutProviders::add)
-//                                    .let { wasProviderAddedToCollection(it, element) }
-//                            } else if (count == 1) {
-//                                constructors
-//                                    .first()
-//                                    .asDependency()
-//                                    .run(scopeDependencies::add)
-//                                    .let { wasProviderAddedToCollection(it, element) }
-//                            }
-//                        }
-//            }
-//        }
-//
-//        val injectionRoots = roundEnvironment.getElementsAnnotatedWith(InjectionRoot::class.java)
-//
-//        if (injectionRoots?.count() ?: 0 > 1) throw MoreThanOneInjectionRootException()
-//
-//        injectionRoots?.firstOrNull()?.let { element ->
-//
-//            if (element !is Symbol.ClassSymbol) throw IllegalAnnotationUsageException(InjectionRoot::class)
-//
-//            NodeBuilder(
-//                pack = processingEnv.elementUtils.getPackageOf(element).toString(),
-//                rootName = element.simpleName.toString(),
-//                scopeDependencies = scopeDependencies,
-//                scopeDependenciesWithoutProviders = scopeDependenciesWithoutProviders,
-//                requestedDependencies = element.getRequestedDependencies()
-//            )
-//                .build()
-//                .write()
-//
-//        }
+        DakkerBuilder(root.toClassName(), activityScopeLevel.nodes).build().write()
         return true
+    }
+
+    private fun RoundEnvironment.getRoot(): Element? {
+        val annotatedRoots = getElementsAnnotatedWith(InjectionRoot::class.java) ?: emptySet()
+
+        return when {
+            annotatedRoots.isEmpty() -> null
+            annotatedRoots.count() > 1 -> throw MoreThanOneInjectionRootException()
+            else -> annotatedRoots.first()
+        }
     }
 
     private fun RoundEnvironment.generateScopesBy(
         coreMarker: KClass<out Annotation>,
-        scopeLevel: KClass<out Annotation>,
-        childNodes: Set<ClassName> = emptySet()
-    ): Set<ClassName> {
+        scopeLevelMarker: KClass<out Annotation>,
+        root: Element,
+        providedByRootDependencies: Set<Dependency>,
+        isRootScope: Boolean
+    ): ScopeLevel {
+        val rootClassName = root.toClassName()
         val scopeDependencies = mutableSetOf<Pair<ClassName?, Dependency>>()
         val scopeDependenciesWithoutProviders = mutableSetOf<Pair<ClassName?, Dependency>>()
 
-        getElementsAnnotatedWith(scopeLevel.java)?.forEach { element ->
+        getElementsAnnotatedWith(scopeLevelMarker.java)?.forEach { element ->
             if (element !is Symbol) return@forEach
 
             val className = element.getCoreClassNameOrNull()
@@ -148,71 +118,55 @@ class DakkerProcessor : AbstractProcessor() {
         }
 
         val scopeDependenciesMap = scopeDependencies
+            .asSequence()
             .groupBy { it.first }
+            .mapKeys { it.key ?: rootClassName }
             .mapValues { it.value.map { pair -> pair.second }.toSet() }
 
         val scopeDependenciesWithoutProvidersMap = scopeDependenciesWithoutProviders
+            .asSequence()
             .groupBy { it.first }
+            .mapKeys { it.key ?: rootClassName }
             .mapValues { it.value.map { pair -> pair.second }.toSet() }
-
-        val injectionCores = getElementsAnnotatedWith(coreMarker.java) ?: emptySet()
-
-        val rootClassName: ClassName? =
-            if (coreMarker == InjectionRoot::class) {
-                if (injectionCores.count() > 1) {
-                    throw MoreThanOneInjectionRootException()
-                } else {
-                    injectionCores.firstOrNull()?.toClassName()
-                }
-            } else {
-                null
-            }
 
         val requestedDependenciesMap = mutableMapOf<ClassName, Set<Dependency>>()
 
-        injectionCores
+        if (isRootScope) {
+            setOf(root)
+        } else {
+            getElementsAnnotatedWith(coreMarker.java) ?: emptySet()
+        }
             .asSequence()
-            .map {
-                if (it is Symbol.ClassSymbol) {
-                    return@map it as Symbol.ClassSymbol
-                }
-                throw IllegalAnnotationUsageException(coreMarker)
-            }
+            .map { it.toClassSymbol() ?: throw IllegalAnnotationUsageException(coreMarker) }
             .map {
                 return@map it.toClassName().also { name ->
                     requestedDependenciesMap[name] = it.getRequestedDependencies()
                 }
             }
-            .map { if (it == rootClassName) null else it }
             .toSet()
             .union(scopeDependenciesMap.keys)
             .union(scopeDependenciesWithoutProvidersMap.keys)
             .onEach {
-                if (it == null) {
-                    if (rootClassName == null) throw NoInjectionRootException()
-
-                    NodeBuilder(
-                        pack = rootClassName.packageName,
-                        rootName = rootClassName.simpleName,
-                        scopeDependencies = scopeDependenciesMap[null] ?: emptySet(),
-                        scopeDependenciesWithoutProviders = scopeDependenciesWithoutProvidersMap[null]
-                            ?: emptySet(),
-                        requestedDependencies = requestedDependenciesMap[rootClassName] ?: emptySet()
-                    )
-                } else {
-                    NodeBuilder(
-                        pack = it.packageName,
-                        rootName = it.simpleName,
-                        scopeDependencies = scopeDependenciesMap[it] ?: emptySet(),
-                        scopeDependenciesWithoutProviders = scopeDependenciesWithoutProvidersMap[it] ?: emptySet(),
-                        requestedDependencies = requestedDependenciesMap[it] ?: emptySet()
-                    )
-                }
+                NodeBuilder(
+                    coreClassName = it,
+                    rootClassName = rootClassName,
+                    rootDependencies = providedByRootDependencies,
+                    scopeDependencies = scopeDependenciesMap[it] ?: emptySet(),
+                    scopeDependenciesWithoutProviders = scopeDependenciesWithoutProvidersMap[it] ?: emptySet(),
+                    requestedDependencies = requestedDependenciesMap[it] ?: emptySet()
+                )
                     .build()
                     .write()
             }
-            .filterNotNull()
             .toSet()
+            .let {
+                ScopeLevel(
+                    it.map(ClassName::nodeClassName).toSet(),
+                    scopeDependenciesMap.values.flatten()
+                        .union(scopeDependenciesWithoutProvidersMap.values.flatten())
+                        .union(requestedDependenciesMap.values.flatten())
+                )
+            }
             .run { return this }
     }
 
@@ -248,7 +202,6 @@ class DakkerProcessor : AbstractProcessor() {
             params
         )
 
-
     private fun Symbol.getCoreClassNameOrNull(): ClassName? {
         for (annotation in annotationMirrors) {
             for (pair in annotation.values) {
@@ -258,6 +211,10 @@ class DakkerProcessor : AbstractProcessor() {
             }
         }
         return null
+    }
+
+    private fun Element.toClassSymbol(): Symbol.ClassSymbol? {
+        return if (this is Symbol.ClassSymbol) this else null
     }
 
     private fun Element.toClassName() = ClassName(

@@ -1,4 +1,4 @@
-package ru.uporov.d.android.common
+package ru.uporov.d.android.common.annotation
 
 import androidx.lifecycle.LifecycleOwner
 import kotlin.reflect.KClass

@@ -1,16 +1,12 @@
 package ru.uporov.d.android.dakker
 
-import ru.uporov.d.android.common.NodeScope
+import android.util.Log
+import ru.uporov.d.android.common.annotation.NodeScope
 
-//@InjectionBranch(
-//    dependencies = [Context::class, SomeInteractor::class]
-//)
 @NodeScope(MainActivity::class)
-class MainActivityPresenter {
-//
-//    override fun onCreate(savedInstanceState: Bundle?) {
-//        super.onCreate(savedInstanceState)
-//        setContentView(R.layout.activity_main)
-//        DakkerApp.inject(this)
-//    }
+class MainActivityPresenter(someInteractor: SomeInteractor, mainInteactor: MainInteractor) {
+
+    init {
+        Log.d("TAAAG", "presenter is HERE!!!")
+    }
 }

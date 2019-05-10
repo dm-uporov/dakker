@@ -1,6 +1,6 @@
 package ru.uporov.d.android.dakker
 
-import ru.uporov.d.android.common.ApplicationScope
+import ru.uporov.d.android.common.annotation.ApplicationScope
 
 @ApplicationScope
 class ThirdInteractor {

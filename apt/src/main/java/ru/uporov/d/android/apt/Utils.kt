@@ -17,11 +17,17 @@ fun Symbol.MethodSymbol.paramsAsDependencies(): List<Dependency> {
     }
 }
 
-
 fun Type.ClassType.toKClassList(): ClassName {
     val type = toString()
     return ClassName(type.substringBeforeLast("."), type.substringAfterLast("."))
 }
+
+private const val NODE_FIELD_NAME_FORMAT = "%sNode"
+
+fun ClassName.nodeName() = NODE_FIELD_NAME_FORMAT.format(simpleName)
+
+fun ClassName.nodeClassName() = ClassName(packageName, nodeName())
+
 
 //    fun Symbol.ClassSymbol.getClassesFromAnnotationParams() {
 //        val branches = mutableSetOf<ClassName>()
