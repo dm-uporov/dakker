@@ -3,12 +3,13 @@ package ru.uporov.d.android.dakker
 import android.app.Application
 import android.content.Context
 import ru.uporov.d.android.common.annotation.Inject
-import ru.uporov.d.android.common.annotation.InjectionRoot
+import ru.uporov.d.android.common.annotation.DakkerApplication
+import ru.uporov.d.android.common.provider.single
 import ru.uporov.d.android.dakker.AppNode.Companion.appNode
 import ru.uporov.d.android.dakker.Dakker.startDakker
 import ru.uporov.d.android.dakker.MainActivityNode.Companion.mainActivityNode
 
-@InjectionRoot
+@DakkerApplication
 class App : Application() {
 
     @get:Inject
@@ -23,7 +24,7 @@ class App : Application() {
 
     private fun initDakker() {
         startDakker(
-            appNode { this },
+            appNode(single { this }),
             mainActivityNode()
         )
     }

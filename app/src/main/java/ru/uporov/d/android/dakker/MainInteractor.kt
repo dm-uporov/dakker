@@ -1,6 +1,6 @@
 package ru.uporov.d.android.dakker
 
-import ru.uporov.d.android.common.annotation.NodeScope
+import ru.uporov.d.android.common.annotation.ActivityScope
 
-@NodeScope(MainActivity::class)
+@ActivityScope(MainActivity::class, isSinglePerScope = false)
 class MainInteractor

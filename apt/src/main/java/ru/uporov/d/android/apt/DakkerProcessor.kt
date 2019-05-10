@@ -29,7 +29,7 @@ class DakkerProcessor : AbstractProcessor() {
 
     override fun getSupportedAnnotationTypes(): Set<String> {
         return setOf(
-            InjectionRoot::class.java.name,
+            DakkerApplication::class.java.name,
             ApplicationScope::class.java.name
         )
     }
@@ -42,15 +42,15 @@ class DakkerProcessor : AbstractProcessor() {
         val root = roundEnvironment.getRoot() ?: return true
 
         val appScopeLevel = roundEnvironment.generateScopesBy(
-            coreMarker = InjectionRoot::class,
+            coreMarker = DakkerApplication::class,
             scopeLevelMarker = ApplicationScope::class,
             root = root,
             providedByRootDependencies = emptySet(),
             isRootScope = true
         )
         val activityScopeLevel = roundEnvironment.generateScopesBy(
-            coreMarker = InjectionNode::class,
-            scopeLevelMarker = NodeScope::class,
+            coreMarker = DakkerActivity::class,
+            scopeLevelMarker = ActivityScope::class,
             root = root,
             providedByRootDependencies = appScopeLevel.providedDependencies,
             isRootScope = false
@@ -61,7 +61,7 @@ class DakkerProcessor : AbstractProcessor() {
     }
 
     private fun RoundEnvironment.getRoot(): Element? {
-        val annotatedRoots = getElementsAnnotatedWith(InjectionRoot::class.java) ?: emptySet()
+        val annotatedRoots = getElementsAnnotatedWith(DakkerApplication::class.java) ?: emptySet()
 
         return when {
             annotatedRoots.isEmpty() -> null
@@ -85,10 +85,11 @@ class DakkerProcessor : AbstractProcessor() {
             if (element !is Symbol) return@forEach
 
             val className = element.getCoreClassNameOrNull()
+            val isSinglePerScope = element.getIsSinglePerScope()
             when (element) {
                 is Symbol.MethodSymbol ->
                     element
-                        .asDependency()
+                        .asDependency(isSinglePerScope)
                         .let { scopeDependencies.add(className to it) }
                         .let { wasProviderAddedToCollection(it, element.enclClass()) }
                 is Symbol.ClassSymbol ->
@@ -103,13 +104,13 @@ class DakkerProcessor : AbstractProcessor() {
                             val count = constructors.count()
                             if (count > 1) {
                                 element
-                                    .asDependency()
+                                    .asDependency(isSinglePerScope)
                                     .let { scopeDependenciesWithoutProviders.add(className to it) }
                                     .let { wasProviderAddedToCollection(it, element) }
                             } else if (count == 1) {
                                 constructors
                                     .first()
-                                    .asDependency()
+                                    .asDependency(isSinglePerScope)
                                     .let { scopeDependencies.add(className to it) }
                                     .let { wasProviderAddedToCollection(it, element) }
                             }
@@ -161,7 +162,7 @@ class DakkerProcessor : AbstractProcessor() {
             .toSet()
             .let {
                 ScopeLevel(
-                    it.map(ClassName::nodeClassName).toSet(),
+                    it,
                     scopeDependenciesMap.values.flatten()
                         .union(scopeDependenciesWithoutProvidersMap.values.flatten())
                         .union(requestedDependenciesMap.values.flatten())
@@ -191,14 +192,15 @@ class DakkerProcessor : AbstractProcessor() {
 
     private fun FileSpec.write() = writeTo(File(processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]))
 
-    private fun Symbol.ClassSymbol.asDependency() = asDependency(null)
+    private fun Symbol.ClassSymbol.asDependency(isSinglePerScope: Boolean?) = asDependency(null, isSinglePerScope)
 
-    private fun Symbol.MethodSymbol.asDependency() = asDependency(paramsAsDependencies())
+    private fun Symbol.MethodSymbol.asDependency(isSinglePerScope: Boolean?) = asDependency(paramsAsDependencies(), isSinglePerScope)
 
-    private fun Symbol.asDependency(params: List<Dependency>?) =
+    private fun Symbol.asDependency(params: List<Dependency>?, isSinglePerScope: Boolean?) =
         Dependency(
             processingEnv.elementUtils.getPackageOf(this).toString(),
             enclClass().simpleName.toString(),
+            isSinglePerScope ?: true,
             params
         )
 
@@ -207,6 +209,17 @@ class DakkerProcessor : AbstractProcessor() {
             for (pair in annotation.values) {
                 when (pair.fst.simpleName.toString()) {
                     "coreClass" -> return (pair.snd.value as? Type.ClassType)?.toKClassList()
+                }
+            }
+        }
+        return null
+    }
+
+    private fun Symbol.getIsSinglePerScope(): Boolean? {
+        for (annotation in annotationMirrors) {
+            for (pair in annotation.values) {
+                when (pair.fst.simpleName.toString()) {
+                    "isSinglePerScope" -> return (pair.snd.value as? Boolean)
                 }
             }
         }

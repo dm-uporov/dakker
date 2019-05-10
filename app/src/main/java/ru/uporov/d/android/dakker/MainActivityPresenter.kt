@@ -1,12 +1,6 @@
 package ru.uporov.d.android.dakker
 
-import android.util.Log
-import ru.uporov.d.android.common.annotation.NodeScope
+import ru.uporov.d.android.common.annotation.ActivityScope
 
-@NodeScope(MainActivity::class)
-class MainActivityPresenter(someInteractor: SomeInteractor, mainInteactor: MainInteractor) {
-
-    init {
-        Log.d("TAAAG", "presenter is HERE!!!")
-    }
-}
+@ActivityScope(MainActivity::class)
+class MainActivityPresenter(someInteractor: SomeInteractor, mainInteactor: MainInteractor)

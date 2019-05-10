@@ -5,6 +5,7 @@ import com.squareup.kotlinpoet.ClassName
 data class Dependency(
     val pack: String,
     val name: String,
+    val isSinglePerScope: Boolean = false,
     val params: List<Dependency>? = null
 ) {
     val qualifiedName = "$pack.$name"

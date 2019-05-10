@@ -4,6 +4,7 @@ import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import ru.uporov.d.android.common.exception.DependenciesConflictException
 import ru.uporov.d.android.common.exception.DependencyIsNotProvidedException
+import ru.uporov.d.android.common.provider.Provider
 
 private const val FILE_NAME_FORMAT = "Dakker%s"
 private const val PROVIDER_NAME_FORMAT = "%sProvider"
@@ -46,6 +47,7 @@ class NodeBuilder(
     fun build(): FileSpec {
         checkDependenciesGraph()
         return FileSpec.builder(pack, fileName)
+            .addImport("ru.uporov.d.android.common.provider", "single", "factory")
             .withInjectFunctions()
             .withGetFunctions()
             .withNodeClass()
@@ -65,8 +67,7 @@ class NodeBuilder(
                 }
             }
 
-        // TODO что за кейс? Опиши подробнее, как выяснишь
-        // Check on conflicting providers
+        // Check on conflicting providers (if there is more than one scope providers for one type)
         scopeDependencies
             .groupingBy { it.qualifiedName }
             .eachCount()
@@ -80,7 +81,7 @@ class NodeBuilder(
         // TODO check on graph conflicts
     }
 
-    private fun FileSpec.Builder.withInjectFunctions(): FileSpec.Builder = apply {
+    private fun FileSpec.Builder.withInjectFunctions() = apply {
         requestedDependencies.forEach {
             addFunction(
                 FunSpec.builder("inject${it.name}")
@@ -92,7 +93,7 @@ class NodeBuilder(
         }
     }
 
-    private fun FileSpec.Builder.withGetFunctions(): FileSpec.Builder = apply {
+    private fun FileSpec.Builder.withGetFunctions() = apply {
         allDependencies.forEach {
             addFunction(
                 FunSpec.builder("get${it.name.capitalize()}")
@@ -104,12 +105,13 @@ class NodeBuilder(
         }
     }
 
-    private fun FileSpec.Builder.withNodeClass(): FileSpec.Builder = apply {
+    private fun FileSpec.Builder.withNodeClass() = apply {
         addType(
             TypeSpec.classBuilder(nodeName)
                 .withNodeConstructor()
                 .withNodeCompanion()
                 .withProvidersProperties()
+                .withTrashFunction()
                 .build()
         )
     }
@@ -139,8 +141,9 @@ class NodeBuilder(
                         }
                         }
                         ${if (scopeDependencies.isEmpty() || dependenciesWithoutProviders.isEmpty()) "" else ","}
-                            ${scopeDependencies.joinToString(",\n") { element ->
-                            "${element.name.asProviderParamName()} = {\n" +
+                        ${scopeDependencies.joinToString(",\n") { element ->
+                            "${element.name.asProviderParamName()} = " +
+                                    "${if (element.isSinglePerScope) "single" else "factory"} {\n" +
                                     "${element.name}(" +
                                     (element.params?.joinToString {
                                         "$coreNodeFromDakkerStatement.${it.name.asProviderParamName()}.invoke(it)"
@@ -151,7 +154,7 @@ class NodeBuilder(
                         ${if (providedByRootDependencies.isEmpty()) "" else ","}
                             ${providedByRootDependencies.joinToString(",\n") { element ->
                             val providerName = element.name.asProviderParamName()
-                            "$providerName = { $rootNodeFromDakkerStatement.$providerName.invoke(this) }"
+                            "$providerName = factory { $rootNodeFromDakkerStatement.$providerName.invoke(this) }"
                         }}
                             )
                         """.trimIndent()
@@ -167,11 +170,23 @@ class NodeBuilder(
             .map {
                 PropertySpec.builder(
                     it.name.asProviderParamName(),
-                    LambdaTypeName.get(null, coreClassName, returnType = it.className)
+                    Provider::class.asClassName().parameterizedBy(coreClassName, it.className)
                 )
                     .initializer(it.name.asProviderParamName())
                     .build()
             }.let(::addProperties)
+    }
+
+    private fun TypeSpec.Builder.withTrashFunction() = apply {
+        addFunction(
+            FunSpec.builder("trash")
+                .apply {
+                    allDependencies.forEach {
+                        addStatement("${it.name.asProviderParamName()}.trashValue()")
+                    }
+                }
+                .build()
+        )
     }
 
     private fun FunSpec.Builder.withProvidersLambdasParamsOf(dependencies: Set<Dependency>) = apply {
@@ -179,7 +194,7 @@ class NodeBuilder(
             addParameter(
                 ParameterSpec.builder(
                     it.name.asProviderParamName(),
-                    LambdaTypeName.get(null, coreClassName, returnType = it.className)
+                    Provider::class.asClassName().parameterizedBy(coreClassName, it.className)
                 ).build()
             )
         }
