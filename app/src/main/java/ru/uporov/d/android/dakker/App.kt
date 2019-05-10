@@ -6,8 +6,6 @@ import ru.uporov.d.android.common.annotation.Inject
 import ru.uporov.d.android.common.annotation.InjectionRoot
 import ru.uporov.d.android.dakker.AppNode.Companion.appNode
 import ru.uporov.d.android.dakker.Dakker.startDakker
-import ru.uporov.d.android.dakker.DakkerApp.injectAnInteractor
-import ru.uporov.d.android.dakker.DakkerApp.injectContext
 import ru.uporov.d.android.dakker.MainActivityNode.Companion.mainActivityNode
 
 @InjectionRoot

@@ -46,7 +46,8 @@ class NodeBuilder(
     fun build(): FileSpec {
         checkDependenciesGraph()
         return FileSpec.builder(pack, fileName)
-            .withCoreObject()
+            .withInjectFunctions()
+            .withGetFunctions()
             .withNodeClass()
             .build()
     }
@@ -79,16 +80,7 @@ class NodeBuilder(
         // TODO check on graph conflicts
     }
 
-    private fun FileSpec.Builder.withCoreObject() = apply {
-        addType(
-            TypeSpec.objectBuilder(fileName)
-                .injectFunctions()
-                .getFunctions()
-                .build()
-        )
-    }
-
-    private fun TypeSpec.Builder.injectFunctions(): TypeSpec.Builder = apply {
+    private fun FileSpec.Builder.withInjectFunctions(): FileSpec.Builder = apply {
         requestedDependencies.forEach {
             addFunction(
                 FunSpec.builder("inject${it.name}")
@@ -100,7 +92,7 @@ class NodeBuilder(
         }
     }
 
-    private fun TypeSpec.Builder.getFunctions(): TypeSpec.Builder = apply {
+    private fun FileSpec.Builder.withGetFunctions(): FileSpec.Builder = apply {
         allDependencies.forEach {
             addFunction(
                 FunSpec.builder("get${it.name.capitalize()}")
@@ -115,14 +107,14 @@ class NodeBuilder(
     private fun FileSpec.Builder.withNodeClass(): FileSpec.Builder = apply {
         addType(
             TypeSpec.classBuilder(nodeName)
-                .nodeConstructor()
-                .nodeCompanion()
-                .providersValues()
+                .withNodeConstructor()
+                .withNodeCompanion()
+                .withProvidersProperties()
                 .build()
         )
     }
 
-    private fun TypeSpec.Builder.nodeConstructor() = apply {
+    private fun TypeSpec.Builder.withNodeConstructor() = apply {
         primaryConstructor(
             FunSpec.constructorBuilder()
                 .withProvidersLambdasParamsOf(allDependencies)
@@ -131,7 +123,7 @@ class NodeBuilder(
         )
     }
 
-    private fun TypeSpec.Builder.nodeCompanion() = apply {
+    private fun TypeSpec.Builder.withNodeCompanion() = apply {
         addType(
             TypeSpec.companionObjectBuilder()
                 .addFunction(
@@ -170,7 +162,7 @@ class NodeBuilder(
         )
     }
 
-    private fun TypeSpec.Builder.providersValues() = apply {
+    private fun TypeSpec.Builder.withProvidersProperties() = apply {
         allDependencies
             .map {
                 PropertySpec.builder(

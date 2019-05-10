@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import ru.uporov.d.android.common.annotation.Inject
 import ru.uporov.d.android.common.annotation.InjectionNode
-import ru.uporov.d.android.dakker.DakkerMainActivity.injectMainActivityPresenter
 
 @InjectionNode
 class MainActivity : AppCompatActivity() {
@@ -17,6 +16,5 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         Log.d("TAAAG", "activity was created")
-        presenter
     }
 }
