@@ -2,6 +2,7 @@ package ru.uporov.d.android.apt
 
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import ru.uporov.d.android.common.Node
 import ru.uporov.d.android.common.exception.DependenciesConflictException
 import ru.uporov.d.android.common.exception.DependencyIsNotProvidedException
 import ru.uporov.d.android.common.provider.Provider
@@ -14,7 +15,7 @@ private const val DAKKER_GET_NODE_FORMAT = "Dakker.get%s()"
 class NodeBuilder(
     private val coreClassName: ClassName,
     private val rootClassName: ClassName,
-    private val rootDependencies: Set<Dependency>,
+    private val parentScopes: Set<Scope>,
     private val scopeDependencies: Set<Dependency>,
     private val scopeDependenciesWithoutProviders: Set<Dependency>,
     private val requestedDependencies: Set<Dependency>
@@ -30,11 +31,12 @@ class NodeBuilder(
     private val coreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(nodeName)
     private val rootNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(rootClassName.nodeName())
 
-    private val providedByRootDependencies: Set<Dependency> = rootDependencies.intersect(
-        requestedDependencies.union(
-            scopeDependencies.map { it.params ?: emptyList() }.flatten().toSet()
+    private val parentDependencies: Set<Dependency> = parentScopes.asSequence().map { it.providedDependencies }.flatten().toSet()
+    private val providedByRootDependencies: Set<Dependency> = parentDependencies.intersect(
+            requestedDependencies.union(
+                scopeDependencies.map { it.params ?: emptyList() }.flatten().toSet()
+            )
         )
-    )
     private val allDependencies: Set<Dependency> = requestedDependencies
         .union(scopeDependenciesWithoutProviders)
         .union(scopeDependencies)
@@ -42,7 +44,7 @@ class NodeBuilder(
     private val dependenciesWithoutProviders: Set<Dependency> = requestedDependencies
         .union(scopeDependenciesWithoutProviders)
         .subtract(scopeDependencies)
-        .subtract(rootDependencies)
+        .subtract(parentDependencies)
 
     fun build(): FileSpec {
         checkDependenciesGraph()
@@ -62,7 +64,7 @@ class NodeBuilder(
             .map { it.params ?: emptyList() }
             .flatten()
             .forEach {
-                if (!allDependencies.contains(it) && !rootDependencies.contains(it)) {
+                if (!allDependencies.contains(it) && !parentDependencies.contains(it)) {
                     throw DependencyIsNotProvidedException(it.qualifiedName)
                 }
             }
@@ -108,6 +110,7 @@ class NodeBuilder(
     private fun FileSpec.Builder.withNodeClass() = apply {
         addType(
             TypeSpec.classBuilder(nodeName)
+                .addSuperinterface(Node::class)
                 .withNodeConstructor()
                 .withNodeCompanion()
                 .withProvidersProperties()
@@ -180,6 +183,7 @@ class NodeBuilder(
     private fun TypeSpec.Builder.withTrashFunction() = apply {
         addFunction(
             FunSpec.builder("trash")
+                .addModifiers(KModifier.OVERRIDE)
                 .apply {
                     allDependencies.forEach {
                         addStatement("${it.name.asProviderParamName()}.trashValue()")

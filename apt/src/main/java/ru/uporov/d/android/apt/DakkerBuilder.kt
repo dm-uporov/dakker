@@ -2,6 +2,7 @@ package ru.uporov.d.android.apt
 
 import androidx.lifecycle.LifecycleOwner
 import com.squareup.kotlinpoet.*
+import ru.uporov.d.android.common.Node
 import ru.uporov.d.android.common.exception.DakkerWasNotInitializedException
 
 private const val FILE_NAME = "Dakker"
@@ -29,7 +30,8 @@ class DakkerBuilder(
                     .nodesGetters()
                     .build()
             )
-            .startScopesFunctions()
+            .startDakkerScopeFunction()
+            .startScopeFunction()
             .build()
     }
 
@@ -64,37 +66,41 @@ class DakkerBuilder(
         )
     }
 
-    private fun FileSpec.Builder.startScopesFunctions() = apply {
-        nodesCores.forEach {
-            addFunction(
-                FunSpec.builder("startDakkerScope")
-                    .addTypeVariable(TypeVariableName("T", it, LifecycleOwner::class.asClassName()))
-                    .receiver(TypeVariableName("T"))
-                    .addCode(
-                        """
+    private fun FileSpec.Builder.startDakkerScopeFunction() = apply {
+        addFunction(
+            FunSpec.builder("startDakkerScope")
+                .receiver(LifecycleOwner::class)
+                .addStatement("when (this) {")
+                .apply {
+                    nodesCores.forEach {
+                        addStatement("is ${it.simpleName} -> startScope(Dakker::get${it.nodeName()})")
+                    }
+                }
+                .addStatement("}")
+                .build()
+        )
+    }
+
+    private fun FileSpec.Builder.startScopeFunction() = apply {
+        addFunction(
+            FunSpec.builder("startScope")
+                .receiver(LifecycleOwner::class)
+                .addParameter("node", LambdaTypeName.get(returnType = Node::class.asTypeName()))
+                .addCode(
+                    """
+                    val lifecycle = getLifecycle()
                     lifecycle.addObserver(object : LifecycleObserver {
                         @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
                         fun onDestroy() {
                             lifecycle.removeObserver(this)
-                            Dakker.get${it.nodeName()}().trash()
+                            node().trash()
                         }
                     })
                     """.trimIndent()
-                    )
-                    .build()
-            )
-        }
+                )
+                .build()
+        )
     }
-//    fun <T> T.startScope() where T : MainActivity, T : LifecycleOwner {
-//        lifecycle.addObserver(object : LifecycleObserver {
-//            @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-//            fun onDestroy() {
-//                lifecycle.removeObserver(this)
-//                mainActivityNode.trash()
-//            }
-//        })
-//    }
-
 
     private fun TypeSpec.Builder.nodesGetters() = apply {
         nodesFields.forEach {

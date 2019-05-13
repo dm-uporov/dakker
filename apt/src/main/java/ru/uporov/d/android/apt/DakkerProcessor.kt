@@ -1,15 +1,14 @@
 package ru.uporov.d.android.apt
 
+import androidx.lifecycle.LifecycleOwner
 import com.google.auto.service.AutoService
-import com.squareup.kotlinpoet.ClassName
-import com.squareup.kotlinpoet.FileSpec
-import com.squareup.kotlinpoet.TypeName
-import com.squareup.kotlinpoet.asTypeName
+import com.squareup.kotlinpoet.*
 import com.sun.tools.javac.code.Symbol
 import com.sun.tools.javac.code.Type
 import ru.uporov.d.android.common.annotation.*
 import ru.uporov.d.android.common.exception.DependenciesConflictException
 import ru.uporov.d.android.common.exception.IllegalAnnotationUsageException
+import ru.uporov.d.android.common.exception.IncorrectCoreOfScopeException
 import ru.uporov.d.android.common.exception.MoreThanOneInjectionRootException
 import java.io.File
 import javax.annotation.processing.*
@@ -41,22 +40,38 @@ class DakkerProcessor : AbstractProcessor() {
     override fun process(set: MutableSet<out TypeElement>?, roundEnvironment: RoundEnvironment): Boolean {
         val root = roundEnvironment.getRoot() ?: return true
 
-        val appScopeLevel = roundEnvironment.generateScopesBy(
+        val appScope = roundEnvironment.generateScopesBy(
             coreMarker = DakkerApplication::class,
             scopeLevelMarker = ApplicationScope::class,
             root = root,
-            providedByRootDependencies = emptySet(),
+            parentScopes = emptySet(),
             isRootScope = true
         )
-        val activityScopeLevel = roundEnvironment.generateScopesBy(
-            coreMarker = DakkerActivity::class,
-            scopeLevelMarker = ActivityScope::class,
-            root = root,
-            providedByRootDependencies = appScopeLevel.providedDependencies,
-            isRootScope = false
+
+        val activityScopes = appScope.union(
+            roundEnvironment.generateScopesBy(
+                coreMarker = DakkerActivity::class,
+                scopeLevelMarker = ActivityScope::class,
+                root = root,
+                parentScopes = appScope,
+                isRootScope = false
+            )
         )
 
-        DakkerBuilder(root.toClassName(), activityScopeLevel.nodes).build().write()
+        val fragmentScopes = activityScopes.union(
+            roundEnvironment.generateScopesBy(
+                coreMarker = DakkerFragment::class,
+                scopeLevelMarker = FragmentScope::class,
+                root = root,
+                parentScopes = activityScopes,
+                isRootScope = false
+            )
+        )
+
+        DakkerBuilder(
+            root.toClassName(),
+            fragmentScopes.subtract(appScope).asSequence().map { it.core }.toSet()
+        ).build().write()
         return true
     }
 
@@ -74,9 +89,9 @@ class DakkerProcessor : AbstractProcessor() {
         coreMarker: KClass<out Annotation>,
         scopeLevelMarker: KClass<out Annotation>,
         root: Element,
-        providedByRootDependencies: Set<Dependency>,
+        parentScopes: Set<Scope>,
         isRootScope: Boolean
-    ): ScopeLevel {
+    ): Set<Scope> {
         val rootClassName = root.toClassName()
         val scopeDependencies = mutableSetOf<Pair<ClassName?, Dependency>>()
         val scopeDependenciesWithoutProviders = mutableSetOf<Pair<ClassName?, Dependency>>()
@@ -138,7 +153,10 @@ class DakkerProcessor : AbstractProcessor() {
             getElementsAnnotatedWith(coreMarker.java) ?: emptySet()
         }
             .asSequence()
+            // Core of scope must be class
             .map { it.toClassSymbol() ?: throw IllegalAnnotationUsageException(coreMarker) }
+            // Core of scope must implement LifecycleOwner, to Dakker can trash all scope onDestroy
+            .onEach { if (!isRootScope) it.checkOnLifecycleOwnerInterface() }
             .map {
                 return@map it.toClassName().also { name ->
                     requestedDependenciesMap[name] = it.getRequestedDependencies()
@@ -147,27 +165,28 @@ class DakkerProcessor : AbstractProcessor() {
             .toSet()
             .union(scopeDependenciesMap.keys)
             .union(scopeDependenciesWithoutProvidersMap.keys)
-            .onEach {
+            .map {
+                val thisScopeDependencies = scopeDependenciesMap[it] ?: emptySet()
+                val thisScopeDependenciesWithoutProviders = scopeDependenciesWithoutProvidersMap[it] ?: emptySet()
+                val requestedDependencies = requestedDependenciesMap[it] ?: emptySet()
                 NodeBuilder(
                     coreClassName = it,
                     rootClassName = rootClassName,
-                    rootDependencies = providedByRootDependencies,
-                    scopeDependencies = scopeDependenciesMap[it] ?: emptySet(),
-                    scopeDependenciesWithoutProviders = scopeDependenciesWithoutProvidersMap[it] ?: emptySet(),
-                    requestedDependencies = requestedDependenciesMap[it] ?: emptySet()
+                    parentScopes = parentScopes,
+                    scopeDependencies = thisScopeDependencies,
+                    scopeDependenciesWithoutProviders = thisScopeDependenciesWithoutProviders,
+                    requestedDependencies = requestedDependencies
                 )
                     .build()
                     .write()
-            }
-            .toSet()
-            .let {
-                ScopeLevel(
+                return@map Scope(
                     it,
-                    scopeDependenciesMap.values.flatten()
-                        .union(scopeDependenciesWithoutProvidersMap.values.flatten())
-                        .union(requestedDependenciesMap.values.flatten())
+                    thisScopeDependenciesWithoutProviders
+                        .union(thisScopeDependencies)
+                        .union(requestedDependencies)
                 )
             }
+            .toSet()
             .run { return this }
     }
 
@@ -194,7 +213,8 @@ class DakkerProcessor : AbstractProcessor() {
 
     private fun Symbol.ClassSymbol.asDependency(isSinglePerScope: Boolean?) = asDependency(null, isSinglePerScope)
 
-    private fun Symbol.MethodSymbol.asDependency(isSinglePerScope: Boolean?) = asDependency(paramsAsDependencies(), isSinglePerScope)
+    private fun Symbol.MethodSymbol.asDependency(isSinglePerScope: Boolean?) =
+        asDependency(paramsAsDependencies(), isSinglePerScope)
 
     private fun Symbol.asDependency(params: List<Dependency>?, isSinglePerScope: Boolean?) =
         Dependency(
@@ -224,6 +244,30 @@ class DakkerProcessor : AbstractProcessor() {
             }
         }
         return null
+    }
+
+    private fun Symbol.ClassSymbol.checkOnLifecycleOwnerInterface() {
+        if (!implementsLifecycleOwner()) throw IncorrectCoreOfScopeException(className())
+    }
+
+    private fun Symbol.ClassSymbol.implementsLifecycleOwner(): Boolean {
+        if (interfaces.nonEmpty()) {
+            interfaces.find { it.isKindOfLifecycleOwner() }?.run { return true }
+        }
+
+        if (superclass == Type.noType) return false
+
+        return (superclass.tsym as? Symbol.ClassSymbol)?.implementsLifecycleOwner() ?: false
+    }
+
+    private fun Type.isKindOfLifecycleOwner(): Boolean {
+        if (this !is Type.ClassType) return false
+
+        if (toKClassList() == LifecycleOwner::class.asClassName()) return true
+
+        interfaces_field?.find { isKindOfLifecycleOwner() }?.run {
+            return true
+        } ?: return false
     }
 
     private fun Element.toClassSymbol(): Symbol.ClassSymbol? {
