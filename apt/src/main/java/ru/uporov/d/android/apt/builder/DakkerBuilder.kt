@@ -1,10 +1,7 @@
 package ru.uporov.d.android.apt.builder
 
-import androidx.lifecycle.LifecycleOwner
 import com.squareup.kotlinpoet.*
 import ru.uporov.d.android.apt.nodeClassName
-import ru.uporov.d.android.apt.nodeName
-import ru.uporov.d.android.common.Node
 import ru.uporov.d.android.common.exception.DakkerIsNotInitializedException
 
 internal const val DAKKER_FILE_NAME = "Dakker"
@@ -33,8 +30,6 @@ class DakkerBuilder(
                     .nodesGetters()
                     .build()
             )
-            .bindScopeToLifecycleFunction()
-            .bindScopeFunction()
             .build()
     }
 
@@ -65,43 +60,6 @@ class DakkerBuilder(
                     }
                     addCode(codeBuilder.build())
                 }
-                .build()
-        )
-    }
-
-    private fun FileSpec.Builder.bindScopeToLifecycleFunction() = apply {
-        addFunction(
-            FunSpec.builder("bindScopeToLifecycle")
-                .receiver(LifecycleOwner::class)
-                .addStatement("when (this) {")
-                .apply {
-                    nodesCores.forEach {
-                        addStatement("is ${it.simpleName} -> bindScope(Dakker::get${it.nodeName()})")
-                    }
-                }
-                .addStatement("}")
-                .build()
-        )
-    }
-
-    private fun FileSpec.Builder.bindScopeFunction() = apply {
-        addFunction(
-            FunSpec.builder("bindScope")
-                .addModifiers(KModifier.PRIVATE)
-                .receiver(LifecycleOwner::class)
-                .addParameter("node", LambdaTypeName.get(returnType = Node::class.asTypeName()))
-                .addCode(
-                    """
-                    val lifecycle = getLifecycle()
-                    lifecycle.addObserver(object : LifecycleObserver {
-                        @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-                        fun onDestroy() {
-                            lifecycle.removeObserver(this)
-                            node().trash()
-                        }
-                    })
-                    """.trimIndent()
-                )
                 .build()
         )
     }

@@ -4,7 +4,6 @@ import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import ru.uporov.d.android.apt.model.Dependency
 import ru.uporov.d.android.apt.nodeName
-import ru.uporov.d.android.common.Node
 import ru.uporov.d.android.common.provider.Provider
 
 private const val FILE_NAME_FORMAT = "$DAKKER_FILE_NAME%s"
@@ -71,11 +70,9 @@ class NodeBuilder(
     private fun FileSpec.Builder.withNodeClass() = apply {
         addType(
             TypeSpec.classBuilder(nodeName)
-                .addSuperinterface(Node::class)
                 .withNodeConstructor()
                 .withNodeCompanion()
                 .withProvidersProperties()
-                .withTrashFunction()
                 .build()
         )
     }
@@ -146,19 +143,6 @@ class NodeBuilder(
                     .initializer(it.name.asProviderParamName())
                     .build()
             }.let(::addProperties)
-    }
-
-    private fun TypeSpec.Builder.withTrashFunction() = apply {
-        addFunction(
-            FunSpec.builder("trash")
-                .addModifiers(KModifier.OVERRIDE)
-                .apply {
-                    allDependencies.forEach {
-                        addStatement("${it.name.asProviderParamName()}.trashValue()")
-                    }
-                }
-                .build()
-        )
     }
 
     private fun FunSpec.Builder.withProvidersLambdasParamsOf(dependencies: Set<Dependency>) = apply {

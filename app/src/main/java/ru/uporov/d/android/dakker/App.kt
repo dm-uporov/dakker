@@ -9,8 +9,8 @@ import ru.uporov.d.android.common.provider.factory
 import ru.uporov.d.android.common.provider.single
 import ru.uporov.d.android.dakker.AppNode.Companion.appNode
 import ru.uporov.d.android.dakker.Dakker.startDakker
+import ru.uporov.d.android.dakker.activity.MainActivity
 import ru.uporov.d.android.dakker.activity.MainActivityNode.Companion.mainActivityNode
-import ru.uporov.d.android.dakker.activity.SecondActivity
 import ru.uporov.d.android.dakker.activity.SecondActivityNode.Companion.secondActivityNode
 import ru.uporov.d.android.dakker.business.AnInteractor
 import ru.uporov.d.android.dakker.business.MainActivityViewModel
@@ -41,7 +41,7 @@ class App : Application() {
             secondActivityNode(
                 single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) }
             ),
-            sampleFragmentNode { activity as SecondActivity },
+            sampleFragmentNode { activity as MainActivity },
             dependentFragmentNode { parentFragment as SampleFragment }
         )
     }
