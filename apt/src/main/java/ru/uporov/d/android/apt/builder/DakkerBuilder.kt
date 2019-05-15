@@ -5,9 +5,9 @@ import com.squareup.kotlinpoet.*
 import ru.uporov.d.android.apt.nodeClassName
 import ru.uporov.d.android.apt.nodeName
 import ru.uporov.d.android.common.Node
-import ru.uporov.d.android.common.exception.DakkerWasNotInitializedException
+import ru.uporov.d.android.common.exception.DakkerIsNotInitializedException
 
-private const val FILE_NAME = "Dakker"
+internal const val DAKKER_FILE_NAME = "Dakker"
 
 class DakkerBuilder(
     private val root: ClassName,
@@ -20,20 +20,21 @@ class DakkerBuilder(
         .toMap()
 
     fun build(): FileSpec {
-        return FileSpec.builder(root.packageName, FILE_NAME)
+        return FileSpec.builder(root.packageName, DAKKER_FILE_NAME)
             .addImport(
                 "androidx.lifecycle",
                 "LifecycleObserver", "LifecycleOwner", "OnLifecycleEvent", "Lifecycle"
             )
+            .apply { nodesCores.forEach { addImport(it.packageName, it.simpleName) } }
             .addType(
-                TypeSpec.objectBuilder(FILE_NAME)
+                TypeSpec.objectBuilder(DAKKER_FILE_NAME)
                     .nodesLateinitProperties()
                     .startDakkerFunction()
                     .nodesGetters()
                     .build()
             )
-            .startDakkerScopeFunction()
-            .startScopeFunction()
+            .bindScopeToLifecycleFunction()
+            .bindScopeFunction()
             .build()
     }
 
@@ -60,7 +61,7 @@ class DakkerBuilder(
                     val codeBuilder = CodeBlock.builder()
                     nodesFields.forEach {
                         addParameter(ParameterSpec.builder(it.key, it.value).build())
-                        codeBuilder.addStatement("$FILE_NAME.${it.key} = ${it.key}")
+                        codeBuilder.addStatement("$DAKKER_FILE_NAME.${it.key} = ${it.key}")
                     }
                     addCode(codeBuilder.build())
                 }
@@ -68,14 +69,14 @@ class DakkerBuilder(
         )
     }
 
-    private fun FileSpec.Builder.startDakkerScopeFunction() = apply {
+    private fun FileSpec.Builder.bindScopeToLifecycleFunction() = apply {
         addFunction(
-            FunSpec.builder("startDakkerScope")
+            FunSpec.builder("bindScopeToLifecycle")
                 .receiver(LifecycleOwner::class)
                 .addStatement("when (this) {")
                 .apply {
                     nodesCores.forEach {
-                        addStatement("is ${it.simpleName} -> startScope(Dakker::get${it.nodeName()})")
+                        addStatement("is ${it.simpleName} -> bindScope(Dakker::get${it.nodeName()})")
                     }
                 }
                 .addStatement("}")
@@ -83,9 +84,10 @@ class DakkerBuilder(
         )
     }
 
-    private fun FileSpec.Builder.startScopeFunction() = apply {
+    private fun FileSpec.Builder.bindScopeFunction() = apply {
         addFunction(
-            FunSpec.builder("startScope")
+            FunSpec.builder("bindScope")
+                .addModifiers(KModifier.PRIVATE)
                 .receiver(LifecycleOwner::class)
                 .addParameter("node", LambdaTypeName.get(returnType = Node::class.asTypeName()))
                 .addCode(
@@ -111,7 +113,7 @@ class DakkerBuilder(
                     .returns(it.value)
                     .addCode(
                         """
-                        if (!::${it.key}.isInitialized) throw ${DakkerWasNotInitializedException::class.qualifiedName}()
+                        if (!::${it.key}.isInitialized) throw ${DakkerIsNotInitializedException::class.qualifiedName}()
 
                         return ${it.key}
                     """.trimIndent()

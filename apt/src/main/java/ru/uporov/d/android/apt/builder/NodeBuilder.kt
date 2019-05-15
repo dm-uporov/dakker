@@ -5,14 +5,12 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import ru.uporov.d.android.apt.model.Dependency
 import ru.uporov.d.android.apt.nodeName
 import ru.uporov.d.android.common.Node
-import ru.uporov.d.android.common.exception.DependenciesConflictException
-import ru.uporov.d.android.common.exception.DependencyIsNotProvidedException
 import ru.uporov.d.android.common.provider.Provider
 
-private const val FILE_NAME_FORMAT = "Dakker%s"
+private const val FILE_NAME_FORMAT = "$DAKKER_FILE_NAME%s"
 private const val PROVIDER_NAME_FORMAT = "%sProvider"
 
-private const val DAKKER_GET_NODE_FORMAT = "Dakker.get%s()"
+private const val DAKKER_GET_NODE_FORMAT = "$DAKKER_FILE_NAME.get%s()"
 
 class NodeBuilder(
     private val coreClassName: ClassName,
@@ -37,41 +35,13 @@ class NodeBuilder(
     private val rootCoreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(rootClassName.nodeName())
 
     fun build(): FileSpec {
-        checkDependenciesGraph()
         return FileSpec.builder(pack, fileName)
+            .addImport(rootClassName.packageName, DAKKER_FILE_NAME)
             .addImport("ru.uporov.d.android.common.provider", "single", "factory")
             .withInjectFunctions()
             .withGetFunctions()
             .withNodeClass()
             .build()
-    }
-
-    // TODO вынести ща пределы билдера
-    // TODO надо бы уточнять, в каком конкретно скоупе проблема
-    private fun checkDependenciesGraph() {
-        // check on existence every providers
-        scopeDependencies
-            .asSequence()
-            .map { it.params ?: emptyList() }
-            .flatten()
-            .forEach {
-                if (!allDependencies.contains(it) && !parentDependencies.contains(it)) {
-                    throw DependencyIsNotProvidedException(it.qualifiedName)
-                }
-            }
-
-        // Check on conflicting providers (if there is more than one scope providers for one type)
-        scopeDependencies
-            .groupingBy { it.qualifiedName }
-            .eachCount()
-            .filter { it.value > 1 }
-            .run {
-                if (isNotEmpty()) {
-                    throw DependenciesConflictException(keys.joinToString())
-                }
-            }
-
-        // TODO check on graph conflicts
     }
 
     private fun FileSpec.Builder.withInjectFunctions() = apply {
@@ -135,7 +105,7 @@ class NodeBuilder(
                             return@joinToString "$name = $name"
                         }
                         }
-                        ${if (scopeDependencies.isEmpty() || dependenciesWithoutProviders.isEmpty()) "" else ","}
+                        ${if (dependenciesWithoutProviders.isEmpty() || scopeDependencies.isEmpty()) "" else ","}
                         ${scopeDependencies.joinToString(",\n") { element ->
                             "${element.name.asProviderParamName()} = " +
                                     "${if (element.isSinglePerScope) "single" else "factory"} {\n" +
@@ -146,7 +116,7 @@ class NodeBuilder(
                                     ")" +
                                     "\n}"
                         }}
-                        ${if (parentDependencies.isEmpty()) "" else ","}
+                        ${if ((dependenciesWithoutProviders.isEmpty() && scopeDependencies.isEmpty()) || parentDependencies.isEmpty()) "" else ","}
                             ${parentDependencies.joinToString(",\n") {
                             val providerName = it.name.asProviderParamName()
                             "$providerName = factory { " +

@@ -6,8 +6,6 @@ import ru.uporov.d.android.common.annotation.LifecycleScopeCore
 import ru.uporov.d.android.dakker.R
 import ru.uporov.d.android.dakker.business.MainActivityViewModel
 import ru.uporov.d.android.dakker.business.ThirdInteractor
-import ru.uporov.d.android.dakker.injectMainActivityViewModel
-import ru.uporov.d.android.dakker.injectThirdInteractor
 
 @LifecycleScopeCore
 class SecondActivity : BaseActivity() {

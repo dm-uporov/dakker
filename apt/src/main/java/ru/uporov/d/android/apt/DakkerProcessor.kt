@@ -156,16 +156,16 @@ class DakkerProcessor : AbstractProcessor() {
                         .filter { it.name.toString() == "<init>" }
                         .also { constructors ->
                             val count = constructors.count()
-                            if (count > 1) {
-                                element
-                                    .asDependency(isSinglePerScope)
-                                    .let { scopeLevelDependenciesWithoutProviders.add(scopeCoreClass to it) }
-                                    .let { wasProviderAddedToCollection(it, element) }
-                            } else if (count == 1) {
+                            if (count == 1) {
                                 constructors
                                     .first()
                                     .asDependency(isSinglePerScope)
                                     .let { scopeLevelDependencies.add(scopeCoreClass to it) }
+                                    .let { wasProviderAddedToCollection(it, element) }
+                            } else {
+                                element
+                                    .asDependency(isSinglePerScope)
+                                    .let { scopeLevelDependenciesWithoutProviders.add(scopeCoreClass to it) }
                                     .let { wasProviderAddedToCollection(it, element) }
                             }
                         }
@@ -192,25 +192,48 @@ class DakkerProcessor : AbstractProcessor() {
         val scopeDependenciesWithoutProviders = scopeLevelDependencies.withoutProviders[coreClass] ?: emptySet()
         val requestedDependencies = coreScope.requestedDependencies
 
+        scopeDependencies
+            .groupingBy { it.qualifiedName }
+            .eachCount()
+            .filter { it.value > 1 }
+            .run {
+                if (isNotEmpty()) {
+                    throw DependenciesConflictException(keys.joinToString())
+                }
+            }
+
+        val requestedAsParamsDependencies = scopeDependencies
+            .asSequence()
+            .map { it.params ?: emptyList() }
+            .flatten()
+            .filter {
+                !requestedDependencies.contains(it) &&
+                        !parentDependencies.contains(it) &&
+                        !scopeDependenciesWithoutProviders.contains(it)
+            }
+            .toSet()
+
         val thisScopeDependencies: Set<Dependency> = coreScope.requestedDependencies
             .union(scopeDependenciesWithoutProviders)
             .union(scopeDependencies)
             .union(parentDependencies)
+            .union(requestedAsParamsDependencies)
 
         val dependenciesWithoutProviders: Set<Dependency> = coreScope.requestedDependencies
             .union(scopeDependenciesWithoutProviders)
             .subtract(scopeDependencies)
             .subtract(parentDependencies)
+            .union(requestedAsParamsDependencies)
 
         NodeBuilder(
-            coreClass,
-            parentClassName,
-            rootClassName,
-            thisScopeDependencies,
-            parentDependencies,
-            dependenciesWithoutProviders,
-            scopeDependencies,
-            requestedDependencies
+            coreClassName = coreClass,
+            parentCoreClassName = parentClassName,
+            rootClassName = rootClassName,
+            allDependencies = thisScopeDependencies,
+            parentDependencies = parentDependencies,
+            dependenciesWithoutProviders = dependenciesWithoutProviders,
+            scopeDependencies = scopeDependencies,
+            requestedDependencies = requestedDependencies
         ).build().write()
 
         children.forEach {

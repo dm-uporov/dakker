@@ -4,7 +4,6 @@ import ru.uporov.d.android.common.annotation.Inject
 import ru.uporov.d.android.common.annotation.LifecycleScopeCore
 import ru.uporov.d.android.dakker.activity.SecondActivity
 import ru.uporov.d.android.dakker.business.SampleFragmentPresenter
-import ru.uporov.d.android.dakker.injectSampleFragmentPresenter
 
 @LifecycleScopeCore(parentScopeCoreClass = SecondActivity::class)
 class SampleFragment : BaseFragment() {
