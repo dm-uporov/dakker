@@ -2,10 +2,10 @@ package ru.uporov.d.android.dakker
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import ru.uporov.d.android.common.annotation.DakkerActivity
 import ru.uporov.d.android.common.annotation.Inject
+import ru.uporov.d.android.common.annotation.LifecycleScopeCore
 
-@DakkerActivity
+@LifecycleScopeCore
 class SecondActivity : AppCompatActivity() {
 
     @get:Inject

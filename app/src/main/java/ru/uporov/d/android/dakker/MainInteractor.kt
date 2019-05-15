@@ -1,6 +1,6 @@
 package ru.uporov.d.android.dakker
 
-import ru.uporov.d.android.common.annotation.ActivityScope
+import ru.uporov.d.android.common.annotation.LifecycleScope
 
-@ActivityScope(MainActivity::class, isSinglePerScope = false)
+@LifecycleScope(MainActivity::class, isSinglePerScope = false)
 class MainInteractor

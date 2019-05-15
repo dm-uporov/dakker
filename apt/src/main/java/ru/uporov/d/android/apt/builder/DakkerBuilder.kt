@@ -1,7 +1,9 @@
-package ru.uporov.d.android.apt
+package ru.uporov.d.android.apt.builder
 
 import androidx.lifecycle.LifecycleOwner
 import com.squareup.kotlinpoet.*
+import ru.uporov.d.android.apt.nodeClassName
+import ru.uporov.d.android.apt.nodeName
 import ru.uporov.d.android.common.Node
 import ru.uporov.d.android.common.exception.DakkerWasNotInitializedException
 

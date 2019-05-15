@@ -29,8 +29,8 @@ class App : Application() {
         startDakker(
             appNode(single { this }),
             mainActivityNode(single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) }),
-            secondActivityNode(single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) }),
-            sampleFragmentNode()
+            sampleFragmentNode { this.activity as SecondActivity },
+            secondActivityNode(single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) })
         )
     }
 }

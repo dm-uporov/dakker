@@ -1,8 +1,9 @@
 package ru.uporov.d.android.dakker
 
-import ru.uporov.d.android.common.annotation.ActivityScope
+import ru.uporov.d.android.common.annotation.ApplicationScope
 
-@ActivityScope(coreClass = SecondActivity::class)
+//@ActivityScope(coreClass = SecondActivity::class)
+@ApplicationScope
 class ThirdInteractor {
 
     private val abc = ""

@@ -5,7 +5,7 @@ import kotlin.reflect.KClass
 
 @Retention(AnnotationRetention.SOURCE)
 @Target(AnnotationTarget.CLASS)
-annotation class ActivityScope(
+annotation class LifecycleScope(
     val coreClass: KClass<out LifecycleOwner>,
     val isSinglePerScope: Boolean = true
 )

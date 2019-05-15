@@ -1,7 +1,9 @@
-package ru.uporov.d.android.apt
+package ru.uporov.d.android.apt.builder
 
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import ru.uporov.d.android.apt.model.Dependency
+import ru.uporov.d.android.apt.nodeName
 import ru.uporov.d.android.common.Node
 import ru.uporov.d.android.common.exception.DependenciesConflictException
 import ru.uporov.d.android.common.exception.DependencyIsNotProvidedException
@@ -14,10 +16,12 @@ private const val DAKKER_GET_NODE_FORMAT = "Dakker.get%s()"
 
 class NodeBuilder(
     private val coreClassName: ClassName,
+    private val parentCoreClassName: ClassName?,
     private val rootClassName: ClassName,
-    private val parentScopes: Set<Scope>,
+    private val allDependencies: Set<Dependency>,
+    private val parentDependencies: Set<Dependency>,
+    private val dependenciesWithoutProviders: Set<Dependency>,
     private val scopeDependencies: Set<Dependency>,
-    private val scopeDependenciesWithoutProviders: Set<Dependency>,
     private val requestedDependencies: Set<Dependency>
 ) {
 
@@ -29,22 +33,8 @@ class NodeBuilder(
 
     private val nodeClassName = ClassName(pack, nodeName)
     private val coreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(nodeName)
-    private val rootNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(rootClassName.nodeName())
-
-    private val parentDependencies: Set<Dependency> = parentScopes.asSequence().map { it.providedDependencies }.flatten().toSet()
-    private val providedByRootDependencies: Set<Dependency> = parentDependencies.intersect(
-            requestedDependencies.union(
-                scopeDependencies.map { it.params ?: emptyList() }.flatten().toSet()
-            )
-        )
-    private val allDependencies: Set<Dependency> = requestedDependencies
-        .union(scopeDependenciesWithoutProviders)
-        .union(scopeDependencies)
-        .union(providedByRootDependencies)
-    private val dependenciesWithoutProviders: Set<Dependency> = requestedDependencies
-        .union(scopeDependenciesWithoutProviders)
-        .subtract(scopeDependencies)
-        .subtract(parentDependencies)
+    private val parentCoreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(parentCoreClassName?.nodeName())
+    private val rootCoreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(rootClassName.nodeName())
 
     fun build(): FileSpec {
         checkDependenciesGraph()
@@ -135,6 +125,7 @@ class NodeBuilder(
                     FunSpec.builder(nodeName.decapitalize())
                         .receiver(rootClassName)
                         .returns(nodeClassName)
+                        .withParentCoreProviderParam()
                         .withProvidersLambdasParamsOf(dependenciesWithoutProviders)
                         .addStatement("""
                             return $nodeName(
@@ -154,10 +145,16 @@ class NodeBuilder(
                                     ")" +
                                     "\n}"
                         }}
-                        ${if (providedByRootDependencies.isEmpty()) "" else ","}
-                            ${providedByRootDependencies.joinToString(",\n") { element ->
-                            val providerName = element.name.asProviderParamName()
-                            "$providerName = factory { $rootNodeFromDakkerStatement.$providerName.invoke(this) }"
+                        ${if (parentDependencies.isEmpty()) "" else ","}
+                            ${parentDependencies.joinToString(",\n") {
+                            val providerName = it.name.asProviderParamName()
+                            "$providerName = factory { " +
+                                    if (parentCoreClassName == rootClassName) {
+                                        "$rootCoreNodeFromDakkerStatement.$providerName.invoke(this)"
+                                    } else {
+                                        "$parentCoreNodeFromDakkerStatement.$providerName.invoke(it.parentCoreProvider()) "
+                                    } +
+                                    "}"
                         }}
                             )
                         """.trimIndent()
@@ -201,6 +198,19 @@ class NodeBuilder(
                     Provider::class.asClassName().parameterizedBy(coreClassName, it.className)
                 ).build()
             )
+        }
+    }
+
+    private fun FunSpec.Builder.withParentCoreProviderParam() = apply {
+        parentCoreClassName?.let { parentCoreClassName ->
+            if (parentCoreClassName != rootClassName) {
+                addParameter(
+                    ParameterSpec.builder(
+                        "parentCoreProvider",
+                        LambdaTypeName.get(receiver = coreClassName, returnType = parentCoreClassName)
+                    ).build()
+                )
+            }
         }
     }
 
