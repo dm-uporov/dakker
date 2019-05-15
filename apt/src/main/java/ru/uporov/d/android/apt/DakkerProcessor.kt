@@ -304,9 +304,7 @@ class DakkerProcessor : AbstractProcessor() {
 
         if (toKClassList() == LifecycleOwner::class.asClassName()) return true
 
-        interfaces_field?.find { isKindOfLifecycleOwner() }?.run {
-            return true
-        } ?: return false
+        return interfaces_field?.find { isKindOfLifecycleOwner() } != null
     }
 
     private fun Element.toClassSymbol(): Symbol.ClassSymbol? {

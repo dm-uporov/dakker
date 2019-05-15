@@ -1,4 +1,4 @@
-package ru.uporov.d.android.dakker
+package ru.uporov.d.android.dakker.business
 
 import ru.uporov.d.android.common.annotation.ApplicationScope
 

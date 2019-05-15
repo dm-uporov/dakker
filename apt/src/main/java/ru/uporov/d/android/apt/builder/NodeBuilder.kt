@@ -46,6 +46,7 @@ class NodeBuilder(
             .build()
     }
 
+    // TODO вынести ща пределы билдера
     // TODO надо бы уточнять, в каком конкретно скоупе проблема
     private fun checkDependenciesGraph() {
         // check on existence every providers

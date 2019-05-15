@@ -1,11 +1,13 @@
-package ru.uporov.d.android.dakker
+package ru.uporov.d.android.dakker.fragment
 
-import androidx.fragment.app.Fragment
 import ru.uporov.d.android.common.annotation.Inject
 import ru.uporov.d.android.common.annotation.LifecycleScopeCore
+import ru.uporov.d.android.dakker.activity.SecondActivity
+import ru.uporov.d.android.dakker.business.SampleFragmentPresenter
+import ru.uporov.d.android.dakker.injectSampleFragmentPresenter
 
 @LifecycleScopeCore(parentScopeCoreClass = SecondActivity::class)
-class SampleFragment : Fragment() {
+class SampleFragment : BaseFragment() {
 
     @get:Inject
     val presenter: SampleFragmentPresenter by injectSampleFragmentPresenter()

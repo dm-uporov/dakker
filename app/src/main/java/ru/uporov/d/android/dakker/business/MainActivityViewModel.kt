@@ -1,4 +1,4 @@
-package ru.uporov.d.android.dakker
+package ru.uporov.d.android.dakker.business
 
 import androidx.lifecycle.ViewModel
 

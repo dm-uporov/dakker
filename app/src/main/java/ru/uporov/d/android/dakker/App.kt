@@ -11,6 +11,9 @@ import ru.uporov.d.android.dakker.Dakker.startDakker
 import ru.uporov.d.android.dakker.MainActivityNode.Companion.mainActivityNode
 import ru.uporov.d.android.dakker.SampleFragmentNode.Companion.sampleFragmentNode
 import ru.uporov.d.android.dakker.SecondActivityNode.Companion.secondActivityNode
+import ru.uporov.d.android.dakker.activity.SecondActivity
+import ru.uporov.d.android.dakker.business.AnInteractor
+import ru.uporov.d.android.dakker.business.MainActivityViewModel
 
 @DakkerApplication
 class App : Application() {
