@@ -59,7 +59,7 @@ publish {
     artifactId = 'dakker-kapt'
     publishVersion = "$lib_version"
     desc = "DI-framework. Dagger's principles, koin's syntax"
-    website = 'https://github.com/udy18rus/Dakker'
+    website = 'https://github.com/udy18rus/dakker'
     licences = ['MIT']
     dryRun = false
 }
