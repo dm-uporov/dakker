@@ -1,6 +1,57 @@
 # Dakker
 DI-framework.  Dagger's principles, koin's syntax.
 
+
+```kotlin
+@DakkerApplication
+class App : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        initDakker()
+    }
+
+    private fun initDakker() {
+        startDakker(
+            appNode(single { this }),
+            mainActivityNode(single { SomeInteractor() }),
+            anotherActivityNode(factory { AnotherInteractor() })
+        )
+    }
+}
+
+// This annotation allowed only for LifecycleOwner classes. It means that this class is core of scope.
+@LifecycleScopeCore
+class MainActivity : AppCompatActivity() {
+
+    // This annotation allowed only inside of scope core (or inside @DakkerApplication)
+    // If you use this annotation you have to define a provider 
+    // while dakker initialization (startDakker() invocation)
+    @get:Inject
+    val someInteractor: SomeInteractor by injectSomeInteractor()
+}
+
+// You can define scope of dependency with this annotation. Parameter is the KClass of scope core. 
+// (WIP: String qualifier)
+// 1. If you have only one constructor you don't need to define special provider.
+// 2. If you have constructor params you have to provide only dependencies 
+// that are not provided yet in this scope or in the parent scope.
+// 3. If you have more than one constructor you can annotate prefer constructor as provider
+@LifecycleScope(AnotherActivity::class)
+class AnotherInteractor()
+
+@LifecycleScopeCore
+class AnotherActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Actually it is AnotherActivity.getAnotherInteractor()
+        // So you have access to this dependency only from this class or with this class instance
+        val anotherInteractor = getAnotherInteractor()
+    }
+}
+```
+
 ## Licence
 
 The MIT License
