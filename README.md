@@ -15,13 +15,15 @@ class App : Application() {
         startDakker(
             // Application module
             appNode(
-                // singleton dependency
+                // singleton dependency (type is Application or Context)
+                // here parameter of single is lambda with App as receiver
                 single { this }
             ),
             // MainActivity module
             mainActivityNode(
                 // single per activity lifecycle dependency
                 single { SomeInteractor() },
+                // here parameter of single is lambda with MainActivity as receiver
                 single { MainPresenter() }
             ),
             anotherActivityNode(
