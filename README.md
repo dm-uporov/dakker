@@ -13,9 +13,21 @@ class App : Application() {
 
     private fun initDakker() {
         startDakker(
-            appNode(single { this }),
-            mainActivityNode(single { SomeInteractor() }),
-            anotherActivityNode(factory { AnotherInteractor() })
+            // Application module
+            appNode(
+                // singleton dependency
+                single { this }
+            ),
+            // MainActivity module
+            mainActivityNode(
+                // single per activity lifecycle dependency
+                single { SomeInteractor() },
+                single { MainPresenter() }
+            ),
+            anotherActivityNode(
+                // Every time you will request this dependency you will have new instance
+                factory { AnotherInteractor() }
+            )
         )
     }
 }
