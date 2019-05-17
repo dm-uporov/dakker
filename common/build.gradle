@@ -1,4 +1,7 @@
+apply plugin: 'java-library'
+apply plugin: 'com.novoda.bintray-release'
 apply plugin: 'kotlin'
+
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
@@ -22,4 +25,18 @@ compileTestKotlin {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+}
+
+publish {
+    bintrayUser = System.getenv("BINTRAY_USER") ?: BINTRAY_USER
+    bintrayKey = System.getenv("BINTRAY_API_KEY") ?: BINTRAY_API_KEY
+
+    userOrg = 'udy18rus'
+    groupId = 'com.github.udy18rus'
+    artifactId = 'dakker'
+    publishVersion = "$lib_version"
+    desc = "DI-framework. Dagger's principles, koin's syntax"
+    website = 'https://github.com/udy18rus/Dakker'
+    licences = ['MIT']
+    dryRun = false
 }
