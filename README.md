@@ -1,6 +1,8 @@
 # dakker
-DI-framework.  Dagger's principles, koin's syntax.
 
+[ ![Download](https://api.bintray.com/packages/udy18rus/maven/dakker/images/download.svg) ](https://bintray.com/udy18rus/maven/dakker/_latestVersion)
+
+DI-framework.  Dagger's principles, koin's syntax.
 
 ```kotlin
 @DakkerApplication
@@ -8,10 +10,47 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        initDakker()
+        startDakker(
+            mainActivityNode(
+                single { SomeInteractor() }
+            )
+        )
     }
+}
 
-    private fun initDakker() {
+@LifecycleScopeCore
+class MainActivity : AppCompatActivity() {
+
+    @get:Inject
+    val someInteractor: SomeInteractor by injectSomeInteractor()
+}
+```
+
+
+## Download
+Project ```build.gradle```
+```groovy
+buildscript {
+  repositories {
+    jcenter()
+  }
+}
+```
+Module ```build.gradle```
+```groovy
+dependencies {
+  implementation "com.github.udy18rus:dakker:$dakker_version"
+  kapt "com.github.udy18rus:dakker-kapt:$dakker_version"
+}
+```
+
+## Usage
+```kotlin
+@DakkerApplication
+class App : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
         startDakker(
             // Application module
             appNode(
