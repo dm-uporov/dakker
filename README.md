@@ -2,7 +2,7 @@
 
 [ ![Download](https://api.bintray.com/packages/udy18rus/maven/dakker/images/download.svg) ](https://bintray.com/udy18rus/maven/dakker/_latestVersion)
 
-DI-framework.  Dagger's principles, koin's syntax.
+Android DI-framework. Dagger's principles, koin's syntax.
 
 ```kotlin
 @DakkerApplication
