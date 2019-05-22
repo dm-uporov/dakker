@@ -1,22 +1,22 @@
 package ru.uporov.d.android.apt.model
 
-import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.TypeName
+import ru.uporov.d.android.apt.flatGenerics
 
-data class Dependency(
-    val pack: String,
-    val name: String,
-    val isSinglePerScope: Boolean = false,
+data class Dependency constructor(
+    val typeName: TypeName,
+    val isSinglePerScope: Boolean = true,
     val params: List<Dependency>? = null
 ) {
-    val qualifiedName = "$pack.$name"
-    val className by lazy { ClassName.bestGuess(qualifiedName) }
+
+    val uniqueName: String = typeName.flatGenerics()
 
     override fun equals(other: Any?): Boolean {
         if (other !is Dependency) return false
-        return qualifiedName == other.qualifiedName
+        return typeName == other.typeName
     }
 
     override fun hashCode(): Int {
-        return qualifiedName.hashCode()
+        return typeName.hashCode()
     }
 }

@@ -3,15 +3,17 @@ package ru.uporov.d.android.apt.builder
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import ru.uporov.d.android.apt.model.Dependency
-import ru.uporov.d.android.apt.nodeName
+import ru.uporov.d.android.apt.moduleName
 import ru.uporov.d.android.common.provider.Provider
+import kotlin.reflect.jvm.internal.impl.builtins.jvm.JavaToKotlinClassMap
+import kotlin.reflect.jvm.internal.impl.name.FqName
 
 private const val FILE_NAME_FORMAT = "$DAKKER_FILE_NAME%s"
 private const val PROVIDER_NAME_FORMAT = "%sProvider"
 
-private const val DAKKER_GET_NODE_FORMAT = "$DAKKER_FILE_NAME.get%s()"
+private const val DAKKER_GET_MODULE_FORMAT = "$DAKKER_FILE_NAME.get%s()"
 
-class NodeBuilder(
+class ModuleBuilder(
     private val coreClassName: ClassName,
     private val parentCoreClassName: ClassName?,
     private val rootClassName: ClassName,
@@ -26,12 +28,12 @@ class NodeBuilder(
     private val coreName: String = coreClassName.simpleName
 
     private val fileName = FILE_NAME_FORMAT.format(coreName)
-    private val nodeName = coreClassName.nodeName()
+    private val moduleName = coreClassName.moduleName()
 
-    private val nodeClassName = ClassName(pack, nodeName)
-    private val coreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(nodeName)
-    private val parentCoreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(parentCoreClassName?.nodeName())
-    private val rootCoreNodeFromDakkerStatement = DAKKER_GET_NODE_FORMAT.format(rootClassName.nodeName())
+    private val moduleClassName = ClassName(pack, moduleName)
+    private val coreModuleFromDakkerStatement = DAKKER_GET_MODULE_FORMAT.format(moduleName)
+    private val parentCoreModuleFromDakkerStatement = DAKKER_GET_MODULE_FORMAT.format(parentCoreClassName?.moduleName())
+    private val rootCoreModuleFromDakkerStatement = DAKKER_GET_MODULE_FORMAT.format(rootClassName.moduleName())
 
     fun build(): FileSpec {
         return FileSpec.builder(pack, fileName)
@@ -39,17 +41,25 @@ class NodeBuilder(
             .addImport("ru.uporov.d.android.common.provider", "single", "factory")
             .withInjectFunctions()
             .withGetFunctions()
-            .withNodeClass()
+            .withModuleClass()
             .build()
     }
 
     private fun FileSpec.Builder.withInjectFunctions() = apply {
         requestedDependencies.forEach {
+
+            val lazy = JavaToKotlinClassMap.INSTANCE.mapJavaToKotlin(FqName(it.typeName.toString()))
+                ?.asSingleFqName()
+                ?.asString()
+                ?.let {
+                    Lazy::class.asClassName().parameterizedBy(ClassName.bestGuess(it))
+                } ?: Lazy::class.asClassName().parameterizedBy(it.typeName)
+
             addFunction(
-                FunSpec.builder("inject${it.name}")
+                FunSpec.builder("inject${it.uniqueName}")
                     .receiver(coreClassName)
-                    .returns(Lazy::class.asClassName().parameterizedBy(it.className))
-                    .addStatement(" return lazy { $coreNodeFromDakkerStatement.${it.name.asProviderParamName()}.invoke(this) }")
+                    .returns(lazy)
+                    .addStatement(" return lazy { $coreModuleFromDakkerStatement.${it.uniqueName.asProviderParamName()}.invoke(this) }")
                     .build()
             )
         }
@@ -58,26 +68,26 @@ class NodeBuilder(
     private fun FileSpec.Builder.withGetFunctions() = apply {
         allDependencies.forEach {
             addFunction(
-                FunSpec.builder("get${it.name.capitalize()}")
+                FunSpec.builder("get${it.uniqueName}")
                     .receiver(coreClassName)
-                    .returns(ClassName.bestGuess(it.qualifiedName))
-                    .addStatement(" return $coreNodeFromDakkerStatement.${it.name.asProviderParamName()}.invoke(this)")
+                    .returns(it.typeName)
+                    .addStatement(" return $coreModuleFromDakkerStatement.${it.uniqueName.asProviderParamName()}.invoke(this)")
                     .build()
             )
         }
     }
 
-    private fun FileSpec.Builder.withNodeClass() = apply {
+    private fun FileSpec.Builder.withModuleClass() = apply {
         addType(
-            TypeSpec.classBuilder(nodeName)
-                .withNodeConstructor()
-                .withNodeCompanion()
+            TypeSpec.classBuilder(moduleName)
+                .withModuleConstructor()
+                .withModuleCompanion()
                 .withProvidersProperties()
                 .build()
         )
     }
 
-    private fun TypeSpec.Builder.withNodeConstructor() = apply {
+    private fun TypeSpec.Builder.withModuleConstructor() = apply {
         primaryConstructor(
             FunSpec.constructorBuilder()
                 .withProvidersLambdasParamsOf(allDependencies)
@@ -86,41 +96,41 @@ class NodeBuilder(
         )
     }
 
-    private fun TypeSpec.Builder.withNodeCompanion() = apply {
+    private fun TypeSpec.Builder.withModuleCompanion() = apply {
         addType(
             TypeSpec.companionObjectBuilder()
                 .addFunction(
-                    FunSpec.builder(nodeName.decapitalize())
+                    FunSpec.builder(moduleName.decapitalize())
                         .receiver(rootClassName)
-                        .returns(nodeClassName)
+                        .returns(moduleClassName)
                         .withParentCoreProviderParam()
                         .withProvidersLambdasParamsOf(dependenciesWithoutProviders)
                         .addStatement("""
-                            return $nodeName(
+                            return $moduleName(
                         ${dependenciesWithoutProviders.joinToString {
-                            val name = it.name.asProviderParamName()
+                            val name = it.uniqueName.asProviderParamName()
                             return@joinToString "$name = $name"
                         }
                         }
                         ${if (dependenciesWithoutProviders.isEmpty() || scopeDependencies.isEmpty()) "" else ","}
                         ${scopeDependencies.joinToString(",\n") { element ->
-                            "${element.name.asProviderParamName()} = " +
+                            "${element.uniqueName.asProviderParamName()} = " +
                                     "${if (element.isSinglePerScope) "single" else "factory"} {\n" +
-                                    "${element.name}(" +
+                                    "${element.uniqueName}(" +
                                     (element.params?.joinToString {
-                                        "$coreNodeFromDakkerStatement.${it.name.asProviderParamName()}.invoke(it)"
+                                        "$coreModuleFromDakkerStatement.${it.uniqueName.asProviderParamName()}.invoke(it)"
                                     } ?: "") +
                                     ")" +
                                     "\n}"
                         }}
                         ${if ((dependenciesWithoutProviders.isEmpty() && scopeDependencies.isEmpty()) || parentDependencies.isEmpty()) "" else ","}
                             ${parentDependencies.joinToString(",\n") {
-                            val providerName = it.name.asProviderParamName()
+                            val providerName = it.uniqueName.asProviderParamName()
                             "$providerName = factory { " +
                                     if (parentCoreClassName == rootClassName) {
-                                        "$rootCoreNodeFromDakkerStatement.$providerName.invoke(this)"
+                                        "$rootCoreModuleFromDakkerStatement.$providerName.invoke(this)"
                                     } else {
-                                        "$parentCoreNodeFromDakkerStatement.$providerName.invoke(it.parentCoreProvider()) "
+                                        "$parentCoreModuleFromDakkerStatement.$providerName.invoke(it.parentCoreProvider()) "
                                     } +
                                     "}"
                         }}
@@ -137,10 +147,10 @@ class NodeBuilder(
         allDependencies
             .map {
                 PropertySpec.builder(
-                    it.name.asProviderParamName(),
-                    Provider::class.asClassName().parameterizedBy(coreClassName, it.className)
+                    it.uniqueName.asProviderParamName(),
+                    Provider::class.asClassName().parameterizedBy(coreClassName, it.typeName)
                 )
-                    .initializer(it.name.asProviderParamName())
+                    .initializer(it.uniqueName.asProviderParamName())
                     .build()
             }.let(::addProperties)
     }
@@ -149,8 +159,8 @@ class NodeBuilder(
         dependencies.forEach {
             addParameter(
                 ParameterSpec.builder(
-                    it.name.asProviderParamName(),
-                    Provider::class.asClassName().parameterizedBy(coreClassName, it.className)
+                    it.uniqueName.asProviderParamName(),
+                    Provider::class.asClassName().parameterizedBy(coreClassName, it.typeName)
                 ).build()
             )
         }

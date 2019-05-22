@@ -7,17 +7,17 @@ import ru.uporov.d.android.common.annotation.DakkerApplication
 import ru.uporov.d.android.common.annotation.Inject
 import ru.uporov.d.android.common.provider.factory
 import ru.uporov.d.android.common.provider.single
-import ru.uporov.d.android.dakker.AppNode.Companion.appNode
+import ru.uporov.d.android.dakker.AppModule.Companion.appModule
 import ru.uporov.d.android.dakker.Dakker.startDakker
 import ru.uporov.d.android.dakker.activity.MainActivity
-import ru.uporov.d.android.dakker.activity.MainActivityNode.Companion.mainActivityNode
-import ru.uporov.d.android.dakker.activity.SecondActivityNode.Companion.secondActivityNode
+import ru.uporov.d.android.dakker.activity.MainActivityModule.Companion.mainActivityModule
+import ru.uporov.d.android.dakker.activity.SecondActivityModule.Companion.secondActivityModule
 import ru.uporov.d.android.dakker.business.AnInteractor
 import ru.uporov.d.android.dakker.business.MainActivityViewModel
 import ru.uporov.d.android.dakker.business.ThirdInteractor
-import ru.uporov.d.android.dakker.fragment.DependentFragmentNode.Companion.dependentFragmentNode
+import ru.uporov.d.android.dakker.fragment.DependentFragmentModule.Companion.dependentFragmentModule
 import ru.uporov.d.android.dakker.fragment.SampleFragment
-import ru.uporov.d.android.dakker.fragment.SampleFragmentNode.Companion.sampleFragmentNode
+import ru.uporov.d.android.dakker.fragment.SampleFragmentModule.Companion.sampleFragmentModule
 
 @DakkerApplication
 class App : Application() {
@@ -34,15 +34,18 @@ class App : Application() {
 
     private fun initDakker() {
         startDakker(
-            appNode(single { this }, factory { object : ThirdInteractor {} }),
-            mainActivityNode(
-                single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) }
+            appModule(single { this }, factory { object : ThirdInteractor<Context> {} }),
+            mainActivityModule(
+                single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) },
+                factory { object : ThirdInteractor<String> {} },
+                factory { object : ThirdInteractor<Int> {} }
             ),
-            secondActivityNode(
-                single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) }
+            secondActivityModule(
+                single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) },
+                factory { object : ThirdInteractor<String> {} }
             ),
-            sampleFragmentNode { activity as MainActivity },
-            dependentFragmentNode { parentFragment as SampleFragment }
+            sampleFragmentModule { activity as MainActivity },
+            dependentFragmentModule { parentFragment as SampleFragment }
         )
     }
 }

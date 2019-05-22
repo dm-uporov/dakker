@@ -14,7 +14,7 @@ class SecondActivity : AppCompatActivity() {
     @get:Inject
     val presenter: MainActivityViewModel by injectMainActivityViewModel()
     @get:Inject
-    val thirdInteractor: ThirdInteractor by injectThirdInteractor()
+    val thirdInteractor: ThirdInteractor<String> by injectThirdInteractorString()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

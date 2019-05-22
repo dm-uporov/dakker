@@ -13,6 +13,8 @@ class MainActivity : AppCompatActivity() {
     @get:Inject
     val viewModel: MainActivityViewModel by injectMainActivityViewModel()
     @get:Inject
-    val thirdInteractor: ThirdInteractor by injectThirdInteractor()
+    val thirdInteractorS: ThirdInteractor<String> by injectThirdInteractorString()
+    @get:Inject
+    val thirdInteractorI: ThirdInteractor<Int> by injectThirdInteractorInt()
 
 }

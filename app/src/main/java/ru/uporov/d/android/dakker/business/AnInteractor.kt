@@ -4,4 +4,4 @@ import android.content.Context
 import ru.uporov.d.android.common.annotation.ApplicationScope
 
 @ApplicationScope(isSinglePerScope = false)
-class AnInteractor(context: Context)
+class AnInteractor(context: Context, thirdInteractor: ThirdInteractor<Context>)

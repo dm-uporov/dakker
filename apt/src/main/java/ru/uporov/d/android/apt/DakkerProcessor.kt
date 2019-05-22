@@ -2,11 +2,14 @@ package ru.uporov.d.android.apt
 
 import androidx.lifecycle.LifecycleOwner
 import com.google.auto.service.AutoService
-import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.asClassName
+import com.squareup.kotlinpoet.asTypeName
 import com.sun.tools.javac.code.Symbol
 import com.sun.tools.javac.code.Type
 import ru.uporov.d.android.apt.builder.DakkerBuilder
-import ru.uporov.d.android.apt.builder.NodeBuilder
+import ru.uporov.d.android.apt.builder.ModuleBuilder
 import ru.uporov.d.android.apt.model.*
 import ru.uporov.d.android.common.annotation.*
 import ru.uporov.d.android.common.exception.DependenciesConflictException
@@ -70,7 +73,7 @@ class DakkerProcessor : AbstractProcessor() {
         root: Element,
         rootClassName: ClassName
     ): Scope {
-        val rootLevelDependencies = getScopeLevelDependenciesSet(ApplicationScope::class, rootClassName)
+        val rootLevelDependencies = getScopeLevelDependencies(ApplicationScope::class, rootClassName)
 
         return mapOf(
             rootClassName to ScopeCore(
@@ -95,7 +98,7 @@ class DakkerProcessor : AbstractProcessor() {
         rootClassName: ClassName,
         rootDependencies: Set<Dependency>
     ): Set<ClassName> {
-        val scopeLevelDependencies = getScopeLevelDependenciesSet(scopeLevelMarker, rootClassName)
+        val scopeLevelDependencies = getScopeLevelDependencies(scopeLevelMarker, rootClassName)
 
         val cores = (getElementsAnnotatedWith(coreMarker.java) ?: emptySet())
             .asSequence()
@@ -127,7 +130,7 @@ class DakkerProcessor : AbstractProcessor() {
         return cores.keys
     }
 
-    private fun RoundEnvironment.getScopeLevelDependenciesSet(
+    private fun RoundEnvironment.getScopeLevelDependencies(
         scopeLevelMarker: KClass<out Annotation>,
         rootClassName: ClassName
     ): ScopeLevelDependencies {
@@ -192,16 +195,6 @@ class DakkerProcessor : AbstractProcessor() {
         val scopeDependenciesWithoutProviders = scopeLevelDependencies.withoutProviders[coreClass] ?: emptySet()
         val requestedDependencies = coreScope.requestedDependencies
 
-        scopeDependencies
-            .groupingBy { it.qualifiedName }
-            .eachCount()
-            .filter { it.value > 1 }
-            .run {
-                if (isNotEmpty()) {
-                    throw DependenciesConflictException(keys.joinToString())
-                }
-            }
-
         val requestedAsParamsDependencies = scopeDependencies
             .asSequence()
             .map { it.params ?: emptyList() }
@@ -225,7 +218,7 @@ class DakkerProcessor : AbstractProcessor() {
             .subtract(parentDependencies)
             .union(requestedAsParamsDependencies)
 
-        NodeBuilder(
+        ModuleBuilder(
             coreClassName = coreClass,
             parentCoreClassName = parentClassName,
             rootClassName = rootClassName,
@@ -256,31 +249,13 @@ class DakkerProcessor : AbstractProcessor() {
         return enclosedElements
             .asSequence()
             .filter { it.getAnnotation(Inject::class.java) != null }
-            .map { it.type.returnType.asTypeName() }
-            .map(TypeName::toString)
             .map {
-                Dependency(
-                    it.substringBeforeLast("."),
-                    it.substringAfterLast(".")
-                )
+                Dependency(it.type.returnType.asTypeName().javaToKotlinType())
             }
             .toSet()
     }
 
     private fun FileSpec.write() = writeTo(File(processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]))
-
-    private fun Symbol.ClassSymbol.asDependency(isSinglePerScope: Boolean) = asDependency(null, isSinglePerScope)
-
-    private fun Symbol.MethodSymbol.asDependency(isSinglePerScope: Boolean) =
-        asDependency(paramsAsDependencies(), isSinglePerScope)
-
-    private fun Symbol.asDependency(params: List<Dependency>?, isSinglePerScope: Boolean) =
-        Dependency(
-            processingEnv.elementUtils.getPackageOf(this).toString(),
-            enclClass().simpleName.toString(),
-            isSinglePerScope,
-            params
-        )
 
     private fun Symbol.getDependencyInfo(): DependencyInfo {
         var coreClassName: ClassName? = null
@@ -288,7 +263,7 @@ class DakkerProcessor : AbstractProcessor() {
         for (annotation in annotationMirrors) {
             for (pair in annotation.values) {
                 when (pair.fst.simpleName.toString()) {
-                    "coreClass" -> coreClassName = (pair.snd.value as? Type.ClassType)?.toKClassList()
+                    "coreClass" -> coreClassName = (pair.snd.value as? Type.ClassType)?.toClassName()
                     "isSinglePerScope" -> isSinglePerScope = (pair.snd.value as? Boolean)
                         ?: throw RuntimeException("Incorrect value used as isSinglePerScope")
                 }
@@ -301,7 +276,7 @@ class DakkerProcessor : AbstractProcessor() {
         for (annotation in annotationMirrors) {
             for (pair in annotation.values) {
                 when (pair.fst.simpleName.toString()) {
-                    "parentScopeCoreClass" -> return (pair.snd.value as? Type.ClassType)?.toKClassList()
+                    "parentScopeCoreClass" -> return (pair.snd.value as? Type.ClassType)?.toClassName()
                 }
             }
         }
@@ -325,7 +300,7 @@ class DakkerProcessor : AbstractProcessor() {
     private fun Type.isKindOfLifecycleOwner(): Boolean {
         if (this !is Type.ClassType) return false
 
-        if (toKClassList() == LifecycleOwner::class.asClassName()) return true
+        if (toClassName() == LifecycleOwner::class.asClassName()) return true
 
         return interfaces_field?.find { isKindOfLifecycleOwner() } != null
     }
