@@ -1,6 +1,8 @@
-# Dakker
-DI-framework.  Dagger's principles, koin's syntax.
+# dakker
 
+[ ![Download](https://api.bintray.com/packages/udy18rus/maven/dakker/images/download.svg) ](https://bintray.com/udy18rus/maven/dakker/_latestVersion)
+
+Android DI-framework. Dagger's principles, koin's syntax.
 
 ```kotlin
 @DakkerApplication
@@ -8,14 +10,65 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        initDakker()
-    }
-
-    private fun initDakker() {
         startDakker(
-            appNode(single { this }),
-            mainActivityNode(single { SomeInteractor() }),
-            anotherActivityNode(factory { AnotherInteractor() })
+            mainActivityNode(
+                single { SomeInteractor() }
+            )
+        )
+    }
+}
+
+@LifecycleScopeCore
+class MainActivity : AppCompatActivity() {
+
+    @get:Inject
+    val someInteractor: SomeInteractor by injectSomeInteractor()
+}
+```
+
+
+## Download
+Project ```build.gradle```
+```groovy
+buildscript {
+  repositories {
+    jcenter()
+  }
+}
+```
+Module ```build.gradle```
+```groovy
+dependencies {
+  implementation "com.github.udy18rus:dakker:$dakker_version"
+  kapt "com.github.udy18rus:dakker-kapt:$dakker_version"
+}
+```
+
+## Usage
+```kotlin
+@DakkerApplication
+class App : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        startDakker(
+            // Application module
+            appNode(
+                // singleton dependency (type is Application or Context)
+                // here parameter of single is lambda with App as receiver
+                single { this }
+            ),
+            // MainActivity module
+            mainActivityNode(
+                // single per activity lifecycle dependency
+                single { SomeInteractor() },
+                // here parameter of single is lambda with MainActivity as receiver
+                single { MainPresenter() }
+            ),
+            anotherActivityNode(
+                // Every time you will request this dependency you will have new instance
+                factory { AnotherInteractor() }
+            )
         )
     }
 }
