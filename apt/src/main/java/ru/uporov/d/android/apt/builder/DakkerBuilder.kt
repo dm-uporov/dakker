@@ -25,7 +25,7 @@ class DakkerBuilder(
             .apply { modulesCores.forEach { addImport(it.packageName, it.simpleName) } }
             .addType(
                 TypeSpec.objectBuilder(DAKKER_FILE_NAME)
-                    .nodesLateinitProperties()
+                    .modulesLateinitProperties()
                     .startDakkerFunction()
                     .nodesGetters()
                     .build()
@@ -33,7 +33,7 @@ class DakkerBuilder(
             .build()
     }
 
-    private fun TypeSpec.Builder.nodesLateinitProperties() = apply {
+    private fun TypeSpec.Builder.modulesLateinitProperties() = apply {
         modulesFields.forEach {
             addProperty(
                 PropertySpec.builder(
