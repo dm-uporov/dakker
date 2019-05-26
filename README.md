@@ -11,7 +11,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         startDakker(
-            mainActivityNode(
+            mainActivityModule(
                 single { SomeInteractor() }
             )
         )
@@ -52,21 +52,18 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         startDakker(
-            // Application module
-            appNode(
+            appModule(
                 // singleton dependency (type is Application or Context)
                 // here parameter of single is lambda with App as receiver
                 single { this }
             ),
-            // MainActivity module
-            mainActivityNode(
-                // single per activity lifecycle dependency
-                single { SomeInteractor() },
+            mainActivityModule(
+                // Every time you will request this dependency you will have new instance
+                factory { SomeInteractor() },
                 // here parameter of single is lambda with MainActivity as receiver
                 single { MainPresenter() }
             ),
-            anotherActivityNode(
-                // Every time you will request this dependency you will have new instance
+            anotherActivityModule(
                 factory { AnotherInteractor() }
             )
         )
