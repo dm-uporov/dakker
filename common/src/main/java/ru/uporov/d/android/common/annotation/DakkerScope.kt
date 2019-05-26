@@ -1,11 +1,8 @@
 package ru.uporov.d.android.common.annotation
 
-import androidx.lifecycle.LifecycleOwner
-import kotlin.reflect.KClass
-
 @Retention(AnnotationRetention.SOURCE)
 @Target(AnnotationTarget.CLASS)
 annotation class DakkerScope(
-    val coreClass: KClass<out LifecycleOwner>,
+    val scopeId: Int,
     val isSinglePerScope: Boolean = true
 )

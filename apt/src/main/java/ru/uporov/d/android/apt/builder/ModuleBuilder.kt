@@ -167,15 +167,13 @@ class ModuleBuilder(
     }
 
     private fun FunSpec.Builder.withParentCoreProviderParam() = apply {
-        parentCoreClassName?.let { parentCoreClassName ->
-            if (parentCoreClassName != rootClassName) {
-                addParameter(
-                    ParameterSpec.builder(
-                        "parentCoreProvider",
-                        LambdaTypeName.get(receiver = coreClassName, returnType = parentCoreClassName)
-                    ).build()
-                )
-            }
+        if (parentCoreClassName != null && parentCoreClassName != rootClassName) {
+            addParameter(
+                ParameterSpec.builder(
+                    "parentCoreProvider",
+                    LambdaTypeName.get(receiver = coreClassName, returnType = parentCoreClassName)
+                ).build()
+            )
         }
     }
 
