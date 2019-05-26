@@ -49,8 +49,8 @@ class DakkerProcessor : AbstractProcessor() {
 
         val rootScope = roundEnvironment.generateRootScope(root, rootClassName)
         val scopesCores = roundEnvironment.generateScopesBy(
-            coreMarker = LifecycleScopeCore::class,
-            scopeLevelMarker = LifecycleScope::class,
+            coreMarker = DakkerScopeCore::class,
+            scopeLevelMarker = DakkerScope::class,
             rootClassName = rootClassName,
             rootDependencies = rootScope.providedDependencies
         )

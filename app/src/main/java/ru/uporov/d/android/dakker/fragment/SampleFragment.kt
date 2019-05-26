@@ -3,11 +3,11 @@ package ru.uporov.d.android.dakker.fragment
 import android.content.Context
 import androidx.fragment.app.Fragment
 import ru.uporov.d.android.common.annotation.Inject
-import ru.uporov.d.android.common.annotation.LifecycleScopeCore
+import ru.uporov.d.android.common.annotation.DakkerScopeCore
 import ru.uporov.d.android.dakker.activity.MainActivity
 import ru.uporov.d.android.dakker.business.SampleFragmentPresenter
 
-@LifecycleScopeCore(parentScopeCoreClass = MainActivity::class)
+@DakkerScopeCore(parentScopeCoreClass = MainActivity::class)
 class SampleFragment : Fragment() {
 
     @get:Inject

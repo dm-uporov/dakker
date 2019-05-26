@@ -5,7 +5,7 @@ import kotlin.reflect.KClass
 
 @Retention(AnnotationRetention.SOURCE)
 @Target(AnnotationTarget.CLASS)
-annotation class LifecycleScope(
-    val coreClass: KClass<out LifecycleOwner>,
-    val isSinglePerScope: Boolean = true
+annotation class DakkerScopeCore(
+    // if it is not defined, parent scope will be ApplicationScope
+    val parentScopeCoreClass: KClass<out LifecycleOwner> = Nothing::class
 )

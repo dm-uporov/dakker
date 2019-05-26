@@ -56,13 +56,15 @@ fun TypeName.flatGenerics(): String = toString().flatGenerics()
 fun TypeName.javaToKotlinType(): TypeName =
     if (this is ParameterizedTypeName) {
         (rawType.javaToKotlinType() as ClassName).parameterizedBy(
-            *typeArguments.map { it.javaToKotlinType() }.toTypedArray()
+            *typeArguments.map(TypeName::javaToKotlinType).toTypedArray()
         )
     } else {
-        val className = JavaToKotlinClassMap.INSTANCE
-            .mapJavaToKotlin(FqName(toString()))?.asSingleFqName()?.asString()
-        if (className == null) this
-        else ClassName.bestGuess(className)
+        JavaToKotlinClassMap.INSTANCE
+            .mapJavaToKotlin(FqName(toString()))
+            ?.asSingleFqName()
+            ?.asString()
+            ?.let(ClassName.Companion::bestGuess)
+            ?: this
     }
 
 private fun String.flatGenerics(): String {
