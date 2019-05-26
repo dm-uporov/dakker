@@ -11,11 +11,9 @@ import com.sun.tools.javac.code.Type
 import ru.uporov.d.android.apt.builder.DakkerBuilder
 import ru.uporov.d.android.apt.builder.ModuleBuilder
 import ru.uporov.d.android.apt.model.*
+import ru.uporov.d.android.common.APPLICATION_SCOPE_ID
 import ru.uporov.d.android.common.annotation.*
-import ru.uporov.d.android.common.exception.DependenciesConflictException
-import ru.uporov.d.android.common.exception.IllegalAnnotationUsageException
-import ru.uporov.d.android.common.exception.IncorrectCoreOfScopeException
-import ru.uporov.d.android.common.exception.MoreThanOneInjectionRootException
+import ru.uporov.d.android.common.exception.*
 import java.io.File
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
@@ -73,20 +71,22 @@ class DakkerProcessor : AbstractProcessor() {
         root: Element,
         rootClassName: ClassName
     ): Scope {
-        val rootLevelDependencies = getScopeLevelDependencies(ApplicationScope::class, rootClassName)
+        val rootLevelDependencies = getScopeLevelDependencies(ApplicationScope::class)
 
         return mapOf(
-            rootClassName to ScopeCore(
-                rootClassName,
+            APPLICATION_SCOPE_ID to ScopeCore(
+                APPLICATION_SCOPE_ID,
                 null,
+                rootClassName,
                 (root as Symbol.ClassSymbol).getRequestedDependencies()
             )
         )
             .buildGraph(
+                scopeId = APPLICATION_SCOPE_ID,
+                parentScopeId = null,
                 rootClassName = rootClassName,
                 coreClass = rootClassName,
                 scopeLevelDependencies = rootLevelDependencies,
-                parentClassName = null,
                 parentDependencies = emptySet()
             )
             .let { Scope(rootClassName, it) }
@@ -98,9 +98,9 @@ class DakkerProcessor : AbstractProcessor() {
         rootClassName: ClassName,
         rootDependencies: Set<Dependency>
     ): Set<ClassName> {
-        val scopeLevelDependencies = getScopeLevelDependencies(scopeLevelMarker, rootClassName)
+        val scopeLevelDependencies = getScopeLevelDependencies(scopeLevelMarker)
 
-        val cores = (getElementsAnnotatedWith(coreMarker.java) ?: emptySet())
+        (getElementsAnnotatedWith(coreMarker.java) ?: emptySet())
             .asSequence()
             // Core of scope must be class
             .map { it.toClassSymbol() ?: throw IllegalAnnotationUsageException(coreMarker) }
@@ -108,46 +108,50 @@ class DakkerProcessor : AbstractProcessor() {
             .onEach { it.checkOnLifecycleOwnerInterface() }
             .map {
                 val coreClassName = it.toClassName()
-                coreClassName to ScopeCore(
-                    coreClassName,
-                    it.parentScopeCoreClass() ?: rootClassName,
-                    it.getRequestedDependencies()
-                )
-            }
-            .toMap()
+                val (scopeId, parentScopeId) = it.getScopeCoreInfo()
+                val requestedDependencies = it.getRequestedDependencies()
 
-        cores.filter { it.value.parentScopeCoreClass == rootClassName }
-            .keys
-            .forEach {
-                cores.buildGraph(
-                    coreClass = it,
-                    rootClassName = rootClassName,
-                    scopeLevelDependencies = scopeLevelDependencies,
-                    parentClassName = rootClassName,
-                    parentDependencies = rootDependencies
+                ScopeCore(
+                    scopeId,
+                    parentScopeId,
+                    coreClassName,
+                    requestedDependencies
                 )
             }
-        return cores.keys
+            .also {
+                val cores = it.map { core -> core.scopeId to core }.toMap()
+                cores.asSequence()
+                    .filter { entry -> entry.value.parentScopeId == APPLICATION_SCOPE_ID }
+                    .forEach { (scopeId, core) ->
+                        cores.buildGraph(
+                            scopeId = scopeId,
+                            parentScopeId = core.parentScopeId,
+                            coreClass = core.coreClass,
+                            rootClassName = rootClassName,
+                            scopeLevelDependencies = scopeLevelDependencies,
+                            parentDependencies = rootDependencies
+                        )
+                    }
+            }
+            .map(ScopeCore::coreClass)
+            .toSet()
+            .run { return this }
     }
 
-    private fun RoundEnvironment.getScopeLevelDependencies(
-        scopeLevelMarker: KClass<out Annotation>,
-        rootClassName: ClassName
-    ): ScopeLevelDependencies {
-        val scopeLevelDependencies = mutableSetOf<Pair<ClassName, Dependency>>()
-        val scopeLevelDependenciesWithoutProviders = mutableSetOf<Pair<ClassName, Dependency>>()
+    private fun RoundEnvironment.getScopeLevelDependencies(scopeLevelMarker: KClass<out Annotation>): ScopeLevelDependencies {
+        val scopeLevelDependencies = mutableSetOf<Pair<Int, Dependency>>()
+        val scopeLevelDependenciesWithoutProviders = mutableSetOf<Pair<Int, Dependency>>()
 
         getElementsAnnotatedWith(scopeLevelMarker.java)?.forEach { element ->
             if (element !is Symbol) return@forEach
 
-            val dependencyInfo = element.getDependencyInfo()
-            val scopeCoreClass = dependencyInfo.scopeCoreClass ?: rootClassName
-            val isSinglePerScope = dependencyInfo.isSinglePerScope
+            val (scopeId, isSinglePerScope) = element.getDependencyInfo()
+
             when (element) {
                 is Symbol.MethodSymbol ->
                     element
                         .asDependency(isSinglePerScope)
-                        .let { scopeLevelDependencies.add(scopeCoreClass to it) }
+                        .let { scopeLevelDependencies.add(scopeId to it) }
                         .let { wasProviderAddedToCollection(it, element.enclClass()) }
                 is Symbol.ClassSymbol ->
                     element
@@ -163,12 +167,12 @@ class DakkerProcessor : AbstractProcessor() {
                                 constructors
                                     .first()
                                     .asDependency(isSinglePerScope)
-                                    .let { scopeLevelDependencies.add(scopeCoreClass to it) }
+                                    .let { scopeLevelDependencies.add(scopeId to it) }
                                     .let { wasProviderAddedToCollection(it, element) }
                             } else {
                                 element
                                     .asDependency(isSinglePerScope)
-                                    .let { scopeLevelDependenciesWithoutProviders.add(scopeCoreClass to it) }
+                                    .let { scopeLevelDependenciesWithoutProviders.add(scopeId to it) }
                                     .let { wasProviderAddedToCollection(it, element) }
                             }
                         }
@@ -181,18 +185,19 @@ class DakkerProcessor : AbstractProcessor() {
         )
     }
 
-    private fun Map<ClassName, ScopeCore>.buildGraph(
+    private fun Map<Int, ScopeCore>.buildGraph(
+        scopeId: Int,
+        parentScopeId: Int? = null,
         coreClass: ClassName,
         rootClassName: ClassName,
         scopeLevelDependencies: ScopeLevelDependencies,
-        parentClassName: ClassName?,
         parentDependencies: Set<Dependency>
     ): Set<Dependency> {
-        val children = filter { it.value.parentScopeCoreClass == coreClass }
-        val coreScope = get(coreClass) ?: throw RuntimeException("Something went wrong")
+        val children = filter { it.value.parentScopeId == scopeId }
+        val coreScope = get(scopeId) ?: throw RuntimeException("Something went wrong")
 
-        val scopeDependencies = scopeLevelDependencies.withProviders[coreClass] ?: emptySet()
-        val scopeDependenciesWithoutProviders = scopeLevelDependencies.withoutProviders[coreClass] ?: emptySet()
+        val scopeDependencies = scopeLevelDependencies.withProviders[scopeId] ?: emptySet()
+        val scopeDependenciesWithoutProviders = scopeLevelDependencies.withoutProviders[scopeId] ?: emptySet()
         val requestedDependencies = coreScope.requestedDependencies
 
         val requestedAsParamsDependencies = scopeDependencies
@@ -218,9 +223,10 @@ class DakkerProcessor : AbstractProcessor() {
             .subtract(parentDependencies)
             .union(requestedAsParamsDependencies)
 
+
         ModuleBuilder(
             coreClassName = coreClass,
-            parentCoreClassName = parentClassName,
+            parentCoreClassName = get(parentScopeId)?.coreClass ?: rootClassName,
             rootClassName = rootClassName,
             allDependencies = thisScopeDependencies,
             parentDependencies = parentDependencies,
@@ -229,12 +235,13 @@ class DakkerProcessor : AbstractProcessor() {
             requestedDependencies = requestedDependencies
         ).build().write()
 
-        children.forEach {
+        children.forEach { (scopeId, core) ->
             buildGraph(
-                coreClass = it.key,
+                scopeId = scopeId,
+                parentScopeId = core.parentScopeId,
+                coreClass = core.coreClass,
                 rootClassName = rootClassName,
                 scopeLevelDependencies = scopeLevelDependencies,
-                parentClassName = coreClass,
                 parentDependencies = thisScopeDependencies
             )
         }
@@ -258,29 +265,38 @@ class DakkerProcessor : AbstractProcessor() {
     private fun FileSpec.write() = writeTo(File(processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]))
 
     private fun Symbol.getDependencyInfo(): DependencyInfo {
-        var coreClassName: ClassName? = null
+        var scopeId: Int? = null
         var isSinglePerScope: Boolean? = null
         for (annotation in annotationMirrors) {
             for (pair in annotation.values) {
                 when (pair.fst.simpleName.toString()) {
-                    "coreClass" -> coreClassName = (pair.snd.value as? Type.ClassType)?.toClassName()
+                    "scopeId" -> scopeId = pair.snd.value as? Int
                     "isSinglePerScope" -> isSinglePerScope = (pair.snd.value as? Boolean)
                         ?: throw RuntimeException("Incorrect value used as isSinglePerScope")
                 }
             }
         }
-        return DependencyInfo(coreClassName, isSinglePerScope ?: true)
+        return DependencyInfo(
+            scopeId ?: APPLICATION_SCOPE_ID,
+            isSinglePerScope ?: true
+        )
     }
 
-    private fun Symbol.parentScopeCoreClass(): ClassName? {
+    private fun Symbol.getScopeCoreInfo(): ScopeCoreInfo {
+        var scopeId: Int? = null
+        var parentScopeId: Int? = null
         for (annotation in annotationMirrors) {
             for (pair in annotation.values) {
                 when (pair.fst.simpleName.toString()) {
-                    "parentScopeCoreClass" -> return (pair.snd.value as? Type.ClassType)?.toClassName()
+                    "scopeId" -> scopeId = pair.snd.value as? Int
+                    "parentScopeId" -> parentScopeId = pair.snd.value as? Int
                 }
             }
         }
-        return null
+        scopeId ?: throw NoScopeIdException(qualifiedName.toString())
+        if (scopeId == APPLICATION_SCOPE_ID) throw ApplicationScopeIdUsageException(scopeId, qualifiedName.toString())
+
+        return ScopeCoreInfo(scopeId, parentScopeId ?: APPLICATION_SCOPE_ID)
     }
 
     private fun Symbol.ClassSymbol.checkOnLifecycleOwnerInterface() {
@@ -314,8 +330,8 @@ class DakkerProcessor : AbstractProcessor() {
         simpleName.toString()
     )
 
-    private fun Set<Pair<ClassName, Dependency>>.toGroupedMap() = asSequence()
-        .groupBy(Pair<ClassName, Dependency>::first) { it.second }
+    private fun Set<Pair<Int, Dependency>>.toGroupedMap() = asSequence()
+        .groupBy(Pair<Int, Dependency>::first) { it.second }
         .mapValues { it.value.toSet() }
 
     override fun hashCode(): Int {

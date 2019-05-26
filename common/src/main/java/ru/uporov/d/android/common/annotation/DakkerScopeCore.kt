@@ -1,11 +1,10 @@
 package ru.uporov.d.android.common.annotation
 
-import androidx.lifecycle.LifecycleOwner
-import kotlin.reflect.KClass
+import ru.uporov.d.android.common.APPLICATION_SCOPE_ID
 
 @Retention(AnnotationRetention.SOURCE)
 @Target(AnnotationTarget.CLASS)
 annotation class DakkerScopeCore(
-    // if it is not defined, parent scope will be ApplicationScope
-    val parentScopeCoreClass: KClass<out LifecycleOwner> = Nothing::class
+    val scopeId: Int,
+    val parentScopeId: Int = APPLICATION_SCOPE_ID
 )

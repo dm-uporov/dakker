@@ -1,7 +1,7 @@
 package ru.uporov.d.android.dakker.business
 
 import ru.uporov.d.android.common.annotation.DakkerScope
-import ru.uporov.d.android.dakker.activity.MainActivity
+import ru.uporov.d.android.dakker.ScopesIds
 
-@DakkerScope(MainActivity::class, isSinglePerScope = false)
+@DakkerScope(ScopesIds.MAIN_ACTIVITY_SCOPE_ID, isSinglePerScope = false)
 class MainInteractor
