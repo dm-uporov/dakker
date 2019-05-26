@@ -18,7 +18,7 @@ class App : Application() {
     }
 }
 
-@LifecycleScopeCore
+@DakkerScopeCore(scopeId = Constants.MAIN_SCOPE_ID)
 class MainActivity : AppCompatActivity() {
 
     @get:Inject
@@ -71,7 +71,8 @@ class App : Application() {
 }
 
 // This annotation allowed only for LifecycleOwner classes. It means that this class is core of scope.
-@LifecycleScopeCore
+// 'scopeId' is Int constant. Dependencies from different java-modules will be matched by scopeIds.
+@DakkerScopeCore(scopeId = Constants.MAIN_SCOPE_ID)
 class MainActivity : AppCompatActivity() {
 
     // This annotation allowed only inside of scope core (or inside @DakkerApplication)
@@ -87,10 +88,10 @@ class MainActivity : AppCompatActivity() {
 // 2. If you have constructor params you have to provide only dependencies 
 // that are not provided yet in this scope or in the parent scope.
 // 3. If you have more than one constructor you can annotate prefer constructor as provider
-@LifecycleScope(AnotherActivity::class)
+@DakkerScope(scopeId = Constants.SECOND_SCOPE_ID)
 class AnotherInteractor()
 
-@LifecycleScopeCore
+@DakkerScopeCore(scopeId = Constants.SECOND_SCOPE_ID)
 class AnotherActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
