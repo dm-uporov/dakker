@@ -12,12 +12,11 @@ import ru.uporov.d.android.dakker.Dakker.startDakker
 import ru.uporov.d.android.dakker.activity.MainActivity
 import ru.uporov.d.android.dakker.activity.MainActivityModule.Companion.mainActivityModule
 import ru.uporov.d.android.dakker.activity.SecondActivityModule.Companion.secondActivityModule
-import ru.uporov.d.android.dakker.business.AnInteractor
-import ru.uporov.d.android.dakker.business.MainActivityViewModel
-import ru.uporov.d.android.dakker.business.ThirdInteractor
+import ru.uporov.d.android.dakker.business.*
 import ru.uporov.d.android.dakker.fragment.DependentFragmentModule.Companion.dependentFragmentModule
 import ru.uporov.d.android.dakker.fragment.SampleFragment
 import ru.uporov.d.android.dakker.fragment.SampleFragmentModule.Companion.sampleFragmentModule
+import ru.uporov.d.android.dakker.fragment.getThirdInteractorString
 
 @DakkerApplication
 class App : Application() {
@@ -34,17 +33,24 @@ class App : Application() {
 
     private fun initDakker() {
         startDakker(
-            appModule(single { this }, factory { object : ThirdInteractor<Context> {} }),
+            appModule(
+                single { this },
+                factory { object : ThirdInteractor<Context> {} }
+            ),
             mainActivityModule(
                 single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) },
                 factory { object : ThirdInteractor<String> {} },
-                factory { object : ThirdInteractor<Int> {} }
+                factory { object : ThirdInteractor<Int> {} },
+                single { MainInteractor() }
             ),
             secondActivityModule(
                 single { ViewModelProviders.of(it).get(MainActivityViewModel::class.java) },
                 factory { object : ThirdInteractor<String> {} }
             ),
-            sampleFragmentModule { activity as MainActivity },
+            sampleFragmentModule(
+                { activity as MainActivity },
+                single { SampleFragmentPresenter(it.getThirdInteractorString()) }
+            ),
             dependentFragmentModule { parentFragment as SampleFragment }
         )
     }
