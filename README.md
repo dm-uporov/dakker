@@ -84,7 +84,7 @@ class App : Application() {
 }
 ```
 
-### Request of dependencies
+### Dependencies request
 Annotation ```@DakkerScopeCore``` allowed only for ```LifecycleOwner``` classes. Use it to mark cores of scopes.
 ```scopeId``` is ```Int``` constant. Dependencies from different java-modules will be matched by their scopeIds.
 
