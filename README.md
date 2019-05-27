@@ -58,7 +58,7 @@ When you use ```factory``` every time you request this dependency you will have 
 
 Provider's parameter is lambda ```([YourScopeCore]) -> [YourDependency]```, thus you can request another dependencies by scope core to provide current dependency.
 
-WARNING! Cycled dependencies will throw StackOverflowException. Check it yourself.
+**WARNING! Cycled dependencies will throw StackOverflowException. Check it yourself.**
 
 ```kotlin
 @DakkerApplication
@@ -84,12 +84,32 @@ class App : Application() {
 }
 ```
 
-### Dependencies request
-Annotation ```@DakkerScopeCore``` allowed only for ```LifecycleOwner``` classes. Use it to mark cores of scopes.
+### Scopes
+The annotation ```@DakkerScopeCore``` is allowed only for ```LifecycleOwner``` classes. Use it to mark cores of scopes.
 ```scopeId``` is ```Int``` constant. Dependencies from different java-modules will be matched by their scopeIds.
+ 
+```kotlin
+@DakkerScopeCore(scopeId = Constants.MAIN_SCOPE_ID)
+class MainActivity : AppCompatActivity()
+```
 
-Annotation ```@Inject``` allowed only inside of scope core (or inside ```@DakkerApplication```).
-All requested to inject dependencies must be provided while hierarchy definition.
+With ```parentScopeId``` you can define parent scope of the scope. All dependencies from parent scope you can use to provide dependencies of the scope. 
+
+```kotlin
+@DakkerScopeCore(
+    scopeId = Constants.MAIN_FRAGMENT_SCOPE_ID, 
+    parentScopeId = Constants.MAIN_SCOPE_ID
+)
+class MainFragment : Fragment()
+```
+
+***One important rule:
+As well as your scope has a parent scope you must to be able to provide parent scope core instance.
+Otherwise, if you can't do it, it is not your parent scope.***
+
+### Dependencies request
+The annotation ```@Inject``` is allowed only inside of scope core (or inside ```@DakkerApplication```).
+All requested to inject dependencies will be included as scope dependencies and must be provided while hierarchy definition.
 
 ```inject*``` methods will be generated while annotation processing.
  
@@ -102,15 +122,14 @@ class MainActivity : AppCompatActivity() {
 }
 ```
 
-You can include dependency to scope with annotation ```@DakkerScope```. Parameter ```scopeId: Int``` is scope identifier.
-If you annotate class declaration you have to define specific provider while dakker initialization.
+You can include dependencies to scope with the annotation ```@DakkerScope```. Parameter ```scopeId: Int``` is scope identifier. When you annotate the class declaration you have to define specific provider while dakker initialization.
 ```kotlin
 @DakkerScope(scopeId = Constants.SECOND_SCOPE_ID)
 class AnotherInteractor()
 ```
 
-Either you can annotate specific constructor of dependency. It means that you don't need to define specific provider.
-If you have constructor params you will have to provide only dependencies that are not provided yet in this scope (or in the parent scope).
+Either you can annotate specific constructor of dependency, thus you don't need to define specific provider.
+If you have constructor parameters you have to provide only dependencies that are not provided yet in this scope (or in the parent scope).
 ```isSinglePerScope: Boolean``` marks your dependency as single per scope (if ```true``` (by default)) or as factored (if ```false```).
 ```kotlin
 class ThirdInteractor 
