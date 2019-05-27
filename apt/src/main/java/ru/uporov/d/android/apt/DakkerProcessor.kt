@@ -148,34 +148,14 @@ class DakkerProcessor : AbstractProcessor() {
             val (scopeId, isSinglePerScope) = element.getDependencyInfo()
 
             when (element) {
-                is Symbol.MethodSymbol ->
-                    element
-                        .asDependency(isSinglePerScope)
-                        .let { scopeLevelDependencies.add(scopeId to it) }
-                        .let { wasProviderAddedToCollection(it, element.enclClass()) }
-                is Symbol.ClassSymbol ->
-                    element
-                        .members_field
-                        .elements
-                        .asSequence()
-                        .filter { it is Symbol.MethodSymbol }
-                        .map { it as Symbol.MethodSymbol }
-                        .filter { it.name.toString() == "<init>" }
-                        .also { constructors ->
-                            val count = constructors.count()
-                            if (count == 1) {
-                                constructors
-                                    .first()
-                                    .asDependency(isSinglePerScope)
-                                    .let { scopeLevelDependencies.add(scopeId to it) }
-                                    .let { wasProviderAddedToCollection(it, element) }
-                            } else {
-                                element
-                                    .asDependency(isSinglePerScope)
-                                    .let { scopeLevelDependenciesWithoutProviders.add(scopeId to it) }
-                                    .let { wasProviderAddedToCollection(it, element) }
-                            }
-                        }
+                is Symbol.MethodSymbol -> element
+                    .asDependency(isSinglePerScope)
+                    .let { scopeLevelDependencies.add(scopeId to it) }
+                    .let { wasProviderAddedToCollection(it, element.enclClass()) }
+                is Symbol.ClassSymbol -> element
+                    .asDependency(isSinglePerScope)
+                    .let { scopeLevelDependenciesWithoutProviders.add(scopeId to it) }
+                    .let { wasProviderAddedToCollection(it, element) }
             }
         }
 
