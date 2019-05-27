@@ -82,14 +82,17 @@ class MainActivity : AppCompatActivity() {
     val someInteractor: SomeInteractor by injectSomeInteractor()
 }
 
-// You can define scope of dependency with this annotation. Parameter is the KClass of scope core. 
-// (WIP: String qualifier)
-// 1. If you have only one constructor you don't need to define special provider.
-// 2. If you have constructor params you have to provide only dependencies 
-// that are not provided yet in this scope or in the parent scope.
-// 3. If you have more than one constructor you can annotate prefer constructor as provider
+// You can define scope of dependency with this annotation. Parameter is the scopeId - integer constant.
+// In this case you have to define specific provider while dakker initialization.
 @DakkerScope(scopeId = Constants.SECOND_SCOPE_ID)
 class AnotherInteractor()
+
+// You can annotate specific constructor of dependency. Parameter is the scopeId - integer constant.
+// If you have constructor params you will have to provide only dependencies 
+// that are not provided yet in this scope (or in the parent scope).
+class ThirdInteractor 
+@DakkerScope(scopeId = Constants.SECOND_SCOPE_ID) 
+constructor(anotherInteractor: AnotherInteractor)
 
 @DakkerScopeCore(scopeId = Constants.SECOND_SCOPE_ID)
 class AnotherActivity : AppCompatActivity() {
@@ -97,7 +100,7 @@ class AnotherActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Actually it is AnotherActivity.getAnotherInteractor()
-        // So you have access to this dependency only from this class or with this class instance
+        // So you have access to this dependency only from core or with core instance
         val anotherInteractor = getAnotherInteractor()
     }
 }
