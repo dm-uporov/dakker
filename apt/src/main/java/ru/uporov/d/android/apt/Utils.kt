@@ -1,15 +1,15 @@
 package ru.uporov.d.android.apt
 
-import com.squareup.kotlinpoet.ClassName
-import com.squareup.kotlinpoet.ParameterizedTypeName
+import androidx.lifecycle.LifecycleOwner
+import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.TypeName
-import com.squareup.kotlinpoet.asTypeName
 import com.sun.tools.javac.code.Symbol
 import com.sun.tools.javac.code.Type
 import com.sun.tools.javac.util.Name
 import ru.uporov.d.android.apt.model.Dependency
 import ru.uporov.d.android.common.exception.GenericInDependencyException
+import ru.uporov.d.android.common.exception.IncorrectCoreOfScopeException
+import javax.lang.model.element.Element
 import kotlin.reflect.jvm.internal.impl.builtins.jvm.JavaToKotlinClassMap
 import kotlin.reflect.jvm.internal.impl.name.FqName
 
@@ -38,7 +38,6 @@ fun Symbol.MethodSymbol.paramsAsDependencies(): List<Dependency> {
 
     return params.map { it.asDependency(qualifiedName) }
 }
-
 
 fun Type.ClassType.toClassName(): ClassName {
     val type = toString()
@@ -83,3 +82,36 @@ private fun String.flatGenerics(): String {
         }
     }
 }
+
+fun Set<Pair<Int, Dependency>>.toGroupedMap() = asSequence()
+    .groupBy(Pair<Int, Dependency>::first) { it.second }
+    .mapValues { it.value.toSet() }
+
+
+fun Type.isKindOfLifecycleOwner(): Boolean {
+    if (this !is Type.ClassType) return false
+
+    if (toClassName() == LifecycleOwner::class.asClassName()) return true
+
+    return interfaces_field?.find { isKindOfLifecycleOwner() } != null
+}
+
+fun Element.toClassSymbol(): Symbol.ClassSymbol? {
+    return if (this is Symbol.ClassSymbol) this else null
+}
+
+fun Symbol.ClassSymbol.checkOnLifecycleOwnerInterface() {
+    if (!implementsLifecycleOwner()) throw IncorrectCoreOfScopeException(className())
+}
+
+private fun Symbol.ClassSymbol.implementsLifecycleOwner(): Boolean {
+    if (interfaces.nonEmpty()) {
+        interfaces.find { it.isKindOfLifecycleOwner() }?.run { return true }
+    }
+
+    if (superclass == Type.noType) return false
+
+    return (superclass.tsym as? Symbol.ClassSymbol)?.implementsLifecycleOwner() ?: false
+}
+
+fun Element.toClassName() = ClassName.bestGuess(asType().asTypeName().toString())

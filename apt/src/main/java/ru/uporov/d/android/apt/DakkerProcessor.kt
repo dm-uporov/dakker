@@ -1,13 +1,10 @@
 package ru.uporov.d.android.apt
 
-import androidx.lifecycle.LifecycleOwner
 import com.google.auto.service.AutoService
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FileSpec
-import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.asTypeName
 import com.sun.tools.javac.code.Symbol
-import com.sun.tools.javac.code.Type
 import ru.uporov.d.android.apt.builder.DakkerBuilder
 import ru.uporov.d.android.apt.builder.ModuleBuilder
 import ru.uporov.d.android.apt.model.*
@@ -203,7 +200,6 @@ class DakkerProcessor : AbstractProcessor() {
             .subtract(parentDependencies)
             .union(requestedAsParamsDependencies)
 
-
         ModuleBuilder(
             coreClassName = coreClass,
             parentCoreClassName = get(parentScopeId)?.coreClass ?: rootClassName,
@@ -278,41 +274,6 @@ class DakkerProcessor : AbstractProcessor() {
 
         return ScopeCoreInfo(scopeId, parentScopeId ?: APPLICATION_SCOPE_ID)
     }
-
-    private fun Symbol.ClassSymbol.checkOnLifecycleOwnerInterface() {
-        if (!implementsLifecycleOwner()) throw IncorrectCoreOfScopeException(className())
-    }
-
-    private fun Symbol.ClassSymbol.implementsLifecycleOwner(): Boolean {
-        if (interfaces.nonEmpty()) {
-            interfaces.find { it.isKindOfLifecycleOwner() }?.run { return true }
-        }
-
-        if (superclass == Type.noType) return false
-
-        return (superclass.tsym as? Symbol.ClassSymbol)?.implementsLifecycleOwner() ?: false
-    }
-
-    private fun Type.isKindOfLifecycleOwner(): Boolean {
-        if (this !is Type.ClassType) return false
-
-        if (toClassName() == LifecycleOwner::class.asClassName()) return true
-
-        return interfaces_field?.find { isKindOfLifecycleOwner() } != null
-    }
-
-    private fun Element.toClassSymbol(): Symbol.ClassSymbol? {
-        return if (this is Symbol.ClassSymbol) this else null
-    }
-
-    private fun Element.toClassName() = ClassName(
-        processingEnv.elementUtils.getPackageOf(this).toString(),
-        simpleName.toString()
-    )
-
-    private fun Set<Pair<Int, Dependency>>.toGroupedMap() = asSequence()
-        .groupBy(Pair<Int, Dependency>::first) { it.second }
-        .mapValues { it.value.toSet() }
 
     override fun hashCode(): Int {
         return 1
