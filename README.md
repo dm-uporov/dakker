@@ -49,14 +49,14 @@ dependencies {
 ### Initialization - hierarchy definition
 
 To initialize dakker you have to ..:
-1. .. define root of application with annotation ```@DakkerApplication```;
+1. .. define root of the application with the annotation ```@DakkerApplication```;
 2. .. invoke ```startDakker``` with modules and providers definitions (hierarchy definition).
 
-There is two types of providers: ```single``` and ```factory```. 
-If you use ```single``` your dependency will be initialized only one time per corresponding scope.
-If you use ```factory``` every time you will request this dependency you will have a new instance.
+There are two types of providers: ```single``` and ```factory```. 
+When you use ```single``` your dependency will be initialized only one time per corresponding scope.
+When you use ```factory``` every time you request this dependency you will have a new instance.
 
-Parameter of provider is lambda ```([YourScopeCore]) -> [YourDependency]```, so you can request another dependencies by scope core to provide current dependency.
+Provider's parameter is lambda ```([YourScopeCore]) -> [YourDependency]```, thus you can request another dependencies by scope core to provide current dependency.
 
 WARNING! Cycled dependencies will throw StackOverflowException. Check it yourself.
 
