@@ -104,8 +104,19 @@ class MainFragment : Fragment()
 ```
 
 ***One important rule:
-As well as your scope has a parent scope you must to be able to provide parent scope core instance.
+As well as your scope has a parent scope you must to be able to provide parent scope core instance at any time while your scope core is "alive".
 Otherwise, if you can't do it, it is not your parent scope.***
+
+Dependent module definition:
+```kotlin
+...
+mainFragmentModule(
+    // lambda is: [ChildScopeCore].() -> [ParentScopeCore]
+    parentCoreProvider = { activity as MainActivity },
+    // dependencies providers
+)
+...
+```
 
 ### Dependencies request
 The annotation ```@Inject``` is allowed only inside of scope core (or inside ```@DakkerApplication```).
