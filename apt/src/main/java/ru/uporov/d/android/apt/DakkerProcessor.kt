@@ -101,8 +101,8 @@ class DakkerProcessor : AbstractProcessor() {
             .asSequence()
             // Core of scope must be class
             .map { it.toClassSymbol() ?: throw IllegalAnnotationUsageException(coreMarker) }
-            // Core of scope must implement LifecycleOwner, to Dakker can trash all scope onDestroy event
-            .onEach { it.checkOnLifecycleOwnerInterface() }
+            // Core of scope must implement Destroyable or LifecycleOwner, to Dakker can trash all scope onDestroy event
+            .onEach(Symbol.ClassSymbol::checkOnDestroyable)
             .map {
                 val coreClassName = it.toClassName()
                 val (scopeId, parentScopeId) = it.getScopeCoreInfo()

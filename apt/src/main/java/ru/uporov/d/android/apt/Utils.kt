@@ -7,9 +7,11 @@ import com.sun.tools.javac.code.Symbol
 import com.sun.tools.javac.code.Type
 import com.sun.tools.javac.util.Name
 import ru.uporov.d.android.apt.model.Dependency
+import ru.uporov.d.android.common.Destroyable
 import ru.uporov.d.android.common.exception.GenericInDependencyException
 import ru.uporov.d.android.common.exception.IncorrectCoreOfScopeException
 import javax.lang.model.element.Element
+import kotlin.reflect.KClass
 import kotlin.reflect.jvm.internal.impl.builtins.jvm.JavaToKotlinClassMap
 import kotlin.reflect.jvm.internal.impl.name.FqName
 
@@ -87,31 +89,34 @@ fun Set<Pair<Int, Dependency>>.toGroupedMap() = asSequence()
     .groupBy(Pair<Int, Dependency>::first) { it.second }
     .mapValues { it.value.toSet() }
 
-
-fun Type.isKindOfLifecycleOwner(): Boolean {
-    if (this !is Type.ClassType) return false
-
-    if (toClassName() == LifecycleOwner::class.asClassName()) return true
-
-    return interfaces_field?.find { isKindOfLifecycleOwner() } != null
-}
-
 fun Element.toClassSymbol(): Symbol.ClassSymbol? {
     return if (this is Symbol.ClassSymbol) this else null
 }
 
-fun Symbol.ClassSymbol.checkOnLifecycleOwnerInterface() {
-    if (!implementsLifecycleOwner()) throw IncorrectCoreOfScopeException(className())
+fun Element.toClassName() = ClassName.bestGuess(asType().asTypeName().toString())
+
+fun Symbol.ClassSymbol.checkOnDestroyable() {
+    if (!isImplementedOneOfInterfaces(LifecycleOwner::class, Destroyable::class)) {
+        throw IncorrectCoreOfScopeException(className())
+    }
 }
 
-private fun Symbol.ClassSymbol.implementsLifecycleOwner(): Boolean {
+private fun Symbol.ClassSymbol.isImplementedOneOfInterfaces(vararg interfacesToImpl: KClass<*>) : Boolean {
     if (interfaces.nonEmpty()) {
-        interfaces.find { it.isKindOfLifecycleOwner() }?.run { return true }
+        interfaces.find { it.isKindOfOneOf(*interfacesToImpl) }?.run { return true }
     }
 
     if (superclass == Type.noType) return false
 
-    return (superclass.tsym as? Symbol.ClassSymbol)?.implementsLifecycleOwner() ?: false
+    return (superclass.tsym as? Symbol.ClassSymbol)?.isImplementedOneOfInterfaces(*interfacesToImpl) ?: false
 }
 
-fun Element.toClassName() = ClassName.bestGuess(asType().asTypeName().toString())
+private fun Type.isKindOfOneOf(vararg cls: KClass<*>): Boolean {
+    if (this !is Type.ClassType) return false
+
+    cls.forEach {
+        if (toClassName() == it.asClassName()) return true
+    }
+
+    return interfaces_field?.find { isKindOfOneOf(*cls) } != null
+}
