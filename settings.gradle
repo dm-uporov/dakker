@@ -1,1 +1,1 @@
-include ':app', ':common', ':apt', ':dakker_extensions'
+include ':app', ':common', ':apt', ':extensions'
