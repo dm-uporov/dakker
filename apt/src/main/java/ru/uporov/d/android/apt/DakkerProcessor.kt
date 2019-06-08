@@ -117,6 +117,13 @@ class DakkerProcessor : AbstractProcessor() {
             }
             .also {
                 val cores = it.map { core -> core.scopeId to core }.toMap()
+                if (it.count() > cores.count()) {
+                    val ids = it.map { core -> core.scopeId }.toMutableList()
+                    cores.keys.forEach { id ->
+                        ids.remove(id)
+                    }
+                    throw SeveralScopesUseTheSameIdException(ids.first())
+                }
                 cores.asSequence()
                     .filter { entry -> entry.value.parentScopeId == APPLICATION_SCOPE_ID }
                     .forEach { (scopeId, core) ->
