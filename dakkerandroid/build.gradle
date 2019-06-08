@@ -1,0 +1,49 @@
+apply plugin: 'com.android.library'
+apply plugin: 'com.novoda.bintray-release'
+
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+
+android {
+    compileSdkVersion 28
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    defaultConfig {
+        minSdkVersion 15
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.1.0-beta01'
+    implementation "com.github.udy18rus:dakker:$lib_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+}
+
+sourceCompatibility = "7"
+targetCompatibility = "7"
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+repositories {
+    mavenCentral()
+}
+
+publish {
+    bintrayUser = System.getenv("BINTRAY_USER") ?: BINTRAY_USER
+    bintrayKey = System.getenv("BINTRAY_API_KEY") ?: BINTRAY_API_KEY
+
+    userOrg = 'udy18rus'
+    groupId = 'com.github.udy18rus'
+    artifactId = 'dakker-extensions'
+    publishVersion = "$lib_version"
+    desc = "Extensions for DI-framework 'dakker'. Dagger's principles, koin's syntax."
+    website = 'https://github.com/udy18rus/dakker'
+    licences = ['MIT']
+    dryRun = false
+}
