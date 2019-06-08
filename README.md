@@ -41,6 +41,10 @@ Module ```build.gradle```
 dependencies {
   implementation "com.github.udy18rus:dakker:$dakker_version"
   kapt "com.github.udy18rus:dakker-kapt:$dakker_version"
+  
+  // Usefull extensions.
+  // For example, default implementations of Destroyable Service and IntentService
+  implementation "com.github.udy18rus:dakker-extensions:$dakker_version"
 }
 ```
 
@@ -85,8 +89,9 @@ class App : Application() {
 ```
 
 ### Scopes
-The annotation ```@DakkerScopeCore``` is allowed only for ```LifecycleOwner``` classes. Use it to mark cores of scopes.
-```scopeId``` is ```Int``` constant. Dependencies from different java-modules will be matched by their scopeIds.
+Use the annotation ```@DakkerScopeCore``` to mark cores of scopes.
+The annotation is allowed only for ```LifecycleOwner``` or ```Destroyable``` classes . 
+The ```scopeId``` is ```Int``` constant. Dependencies from different java-modules will be matched by their scopeIds.
  
 ```kotlin
 @DakkerScopeCore(scopeId = Constants.MAIN_SCOPE_ID)
