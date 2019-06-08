@@ -45,6 +45,21 @@ dependencies {
 ```
 
 ## Usage
+
+### Initialization - hierarchy definition
+
+To initialize dakker you have to ..:
+1. .. define root of the application with the annotation ```@DakkerApplication```;
+2. .. invoke ```startDakker``` with modules and providers definitions (hierarchy definition).
+
+There are two types of providers: ```single``` and ```factory```. 
+When you use ```single``` your dependency will be initialized only one time per corresponding scope.
+When you use ```factory``` every time you request this dependency you will have a new instance.
+
+Provider's parameter is lambda ```([YourScopeCore]) -> [YourDependency]```, thus you can request another dependencies by scope core to provide current dependency.
+
+**WARNING! Cycled dependencies will throw StackOverflowException. Check it yourself.**
+
 ```kotlin
 @DakkerApplication
 class App : Application() {
@@ -53,15 +68,13 @@ class App : Application() {
         super.onCreate()
         startDakker(
             appModule(
-                // singleton dependency (type is Application or Context)
-                // here parameter of single is lambda with App as receiver
+                // single per application
                 single { this }
             ),
             mainActivityModule(
-                // Every time you will request this dependency you will have new instance
-                factory { SomeInteractor() },
-                // here parameter of single is lambda with MainActivity as receiver
-                single { MainPresenter() }
+                // single per every MainActivity scope
+                single { MainPresenter() },
+                factory { SomeInteractor() }
             ),
             anotherActivityModule(
                 factory { AnotherInteractor() }
@@ -69,27 +82,70 @@ class App : Application() {
         )
     }
 }
+```
 
-// This annotation allowed only for LifecycleOwner classes. It means that this class is core of scope.
-// 'scopeId' is Int constant. Dependencies from different java-modules will be matched by scopeIds.
+### Scopes
+The annotation ```@DakkerScopeCore``` is allowed only for ```LifecycleOwner``` classes. Use it to mark cores of scopes.
+```scopeId``` is ```Int``` constant. Dependencies from different java-modules will be matched by their scopeIds.
+ 
+```kotlin
+@DakkerScopeCore(scopeId = Constants.MAIN_SCOPE_ID)
+class MainActivity : AppCompatActivity()
+```
+
+With ```parentScopeId``` you can define parent scope of the scope. All dependencies from parent scope you can use to provide dependencies of the scope. 
+
+```kotlin
+@DakkerScopeCore(
+    scopeId = Constants.MAIN_FRAGMENT_SCOPE_ID, 
+    parentScopeId = Constants.MAIN_SCOPE_ID
+)
+class MainFragment : Fragment()
+```
+
+***One important rule:
+As well as your scope has a parent scope you must to be able to provide parent scope core instance at any time while your scope core is "alive".
+Otherwise, if you can't do it, it is not your parent scope.***
+
+Dependent module definition:
+```kotlin
+...
+mainFragmentModule(
+    // lambda is: [ChildScopeCore].() -> [ParentScopeCore]
+    parentCoreProvider = { activity as MainActivity },
+    // dependencies providers
+)
+...
+```
+
+### Dependencies request
+The annotation ```@Inject``` is allowed only inside of scope core (or inside ```@DakkerApplication```).
+All requested to inject dependencies will be included as scope dependencies and must be provided while hierarchy definition.
+
+```inject*``` methods will be generated while annotation processing.
+ 
+```kotlin
 @DakkerScopeCore(scopeId = Constants.MAIN_SCOPE_ID)
 class MainActivity : AppCompatActivity() {
 
-    // This annotation allowed only inside of scope core (or inside @DakkerApplication)
-    // If you use this annotation you have to define a provider 
-    // while dakker initialization (startDakker() invocation)
     @get:Inject
     val someInteractor: SomeInteractor by injectSomeInteractor()
 }
+```
 
-// You can define scope of dependency with this annotation. Parameter is the KClass of scope core. 
-// (WIP: String qualifier)
-// 1. If you have only one constructor you don't need to define special provider.
-// 2. If you have constructor params you have to provide only dependencies 
-// that are not provided yet in this scope or in the parent scope.
-// 3. If you have more than one constructor you can annotate prefer constructor as provider
+You can include dependencies to scope with the annotation ```@DakkerScope```. Parameter ```scopeId: Int``` is scope identifier. When you annotate the class declaration you have to define specific provider while dakker initialization.
+```kotlin
 @DakkerScope(scopeId = Constants.SECOND_SCOPE_ID)
 class AnotherInteractor()
+```
+
+Either you can annotate specific constructor of dependency, thus you don't need to define specific provider.
+If you have constructor parameters you have to provide only dependencies that are not provided yet in this scope (or in the parent scope).
+```isSinglePerScope: Boolean``` marks your dependency as single per scope (if ```true``` (by default)) or as factored (if ```false```).
+```kotlin
+class ThirdInteractor 
+@DakkerScope(scopeId = Constants.SECOND_SCOPE_ID, isSinglePerScope = false) 
+constructor(anotherInteractor: AnotherInteractor)
 
 @DakkerScopeCore(scopeId = Constants.SECOND_SCOPE_ID)
 class AnotherActivity : AppCompatActivity() {
@@ -97,7 +153,7 @@ class AnotherActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Actually it is AnotherActivity.getAnotherInteractor()
-        // So you have access to this dependency only from this class or with this class instance
+        // So you have access to this dependency only from core or with core instance
         val anotherInteractor = getAnotherInteractor()
     }
 }
