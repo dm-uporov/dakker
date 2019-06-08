@@ -17,6 +17,9 @@ import ru.uporov.d.android.dakker.fragment.DependentFragmentModule.Companion.dep
 import ru.uporov.d.android.dakker.fragment.SampleFragment
 import ru.uporov.d.android.dakker.fragment.SampleFragmentModule.Companion.sampleFragmentModule
 import ru.uporov.d.android.dakker.fragment.getThirdInteractorString
+import ru.uporov.d.android.dakker.service.CustomDakkerIntentServiceModule.Companion.customDakkerIntentServiceModule
+import ru.uporov.d.android.dakker.service.CustomDakkerServiceModule.Companion.customDakkerServiceModule
+import ru.uporov.d.android.dakker.service.CustomServiceModule.Companion.customServiceModule
 
 @DakkerApplication
 class App : Application() {
@@ -51,7 +54,14 @@ class App : Application() {
                 { activity as MainActivity },
                 single { SampleFragmentPresenter(it.getThirdInteractorString()) }
             ),
-            dependentFragmentModule { parentFragment as SampleFragment }
+            dependentFragmentModule { parentFragment as SampleFragment },
+            customServiceModule(),
+            customDakkerIntentServiceModule(
+                single { ServiceHelper() }
+            ),
+            customDakkerServiceModule(
+                factory { ServiceHelper() }
+            )
         )
     }
 }

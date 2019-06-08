@@ -18,10 +18,6 @@ class DakkerBuilder(
 
     fun build(): FileSpec {
         return FileSpec.builder(root.packageName, DAKKER_FILE_NAME)
-            .addImport(
-                "androidx.lifecycle",
-                "LifecycleObserver", "LifecycleOwner", "OnLifecycleEvent", "Lifecycle"
-            )
             .apply { modulesCores.forEach { addImport(it.packageName, it.simpleName) } }
             .addType(
                 TypeSpec.objectBuilder(DAKKER_FILE_NAME)
